@@ -5,6 +5,7 @@ import WordPressShared
 import WordPressAuthenticator
 import Gridicons
 import UIKit
+import Combine
 
 /// The purpose of this class is to render the collection of Notifications, associated to the main
 /// WordPress.com account.
@@ -20,6 +21,8 @@ class NotificationsViewController: UIViewController, UIViewControllerRestoration
     // MARK: - Properties
 
     let formatter = FormattableContentFormatter()
+
+    let scrollViewTranslationPublisher = PassthroughSubject<CGFloat, Never>()
 
     /// Table View
     ///
@@ -161,6 +164,7 @@ class NotificationsViewController: UIViewController, UIViewControllerRestoration
 
         reloadTableViewPreservingSelection()
         startListeningToCommentDeletedNotifications()
+        sendScrollEventsToBanner()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -2046,5 +2050,19 @@ extension NotificationsViewController: WPScrollableViewController {
     // Used to scroll view to top when tapping on tab bar item when VC is already visible.
     func scrollViewToTop() {
         tableView.scrollRectToVisible(CGRect(x: 0, y: 0, width: 1, height: 1), animated: true)
+    }
+}
+
+// MARK: Jetpack powered banner
+extension NotificationsViewController: JPScrollViewDelegate {
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        scrollViewTranslationPublisher.send(scrollView.panGestureRecognizer.translation(in: scrollView.superview).y)
+    }
+
+    func sendScrollEventsToBanner() {
+        if let bannerView = jetpackBannerView {
+            self.addTranslationObserver(bannerView)
+        }
     }
 }
