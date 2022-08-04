@@ -54,6 +54,10 @@ class JetpackOverlayView: UIView {
 
     @objc private func didTapButton() {
         buttonAction?()
+        guard let controller = self.next as? UIViewController else {
+            return
+        }
+        controller.dismiss(animated: false)
     }
 
     private func setup() {
