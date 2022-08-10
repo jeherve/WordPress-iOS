@@ -7,8 +7,13 @@ protocol PostListViewModelOutputs {
     var trashStringsFetched: ((AbstractPost, PostListTrashAlertStrings) -> Void)? { get set }
 }
 
-/// Convert to protocol if more inputs are needed.
-typealias PostListViewModelInputs = InteractivePostViewDelegate
+protocol PostListViewModelInputs {
+    func didTapTrash(on post: AbstractPost)
+    func didTapStats(on post: AbstractPost)
+    func didTapEdit(on post: AbstractPost)
+    func didTapRetry(on post: AbstractPost)
+    func didTapCancelAutoUpload(on post: AbstractPost)
+}
 
 typealias PostListViewModelType = PostListViewModelInputs & PostListViewModelOutputs
 
@@ -48,8 +53,8 @@ final class PostListViewModel: PostListViewModelInputs, PostListViewModelOutputs
         self.reachabilityUtility = reachabilityUtility
     }
 
-    // MARK: - Outputs
-    func edit(_ post: AbstractPost) {
+    // MARK: - Inputs
+    func didTapEdit(on post: AbstractPost) {
         guard let post = post as? Post else {
             return
         }
@@ -63,52 +68,13 @@ final class PostListViewModel: PostListViewModelInputs, PostListViewModelOutputs
         editingPostUploadSuccess?(post)
     }
 
-    func view(_ post: AbstractPost) {
-
-    }
-
-    func stats(for post: AbstractPost) {
+    func didTapStats(on post: AbstractPost) {
         reachabilityUtility.performActionIfConnectionAvailable {
             viewStatsForPost(post)
         }
     }
 
-    private func viewStatsForPost(_ apost: AbstractPost) {
-        // Check the blog
-        let blog = apost.blog
-
-        guard blog.supports(.stats) else {
-            // Needs Jetpack.
-            return
-        }
-
-        WPAnalytics.track(.postListStatsAction, withProperties: propertiesForAnalytics())
-
-        // Push the Post Stats ViewController
-        guard let postID = apost.postID as? Int else {
-            return
-        }
-
-        SiteStatsInformation.sharedInstance.siteTimeZone = blog.timeZone
-        SiteStatsInformation.sharedInstance.oauth2Token = blog.authToken
-        SiteStatsInformation.sharedInstance.siteID = blog.dotComID
-
-        guard let permaLink = apost.permaLink else {
-            return
-        }
-        let postURL = URL(string: permaLink as String)
-        statsConfigured?(postID, apost.titleForDisplay(), postURL)
-    }
-
-    func duplicate(_ post: AbstractPost) {
-
-    }
-
-    func publish(_ post: AbstractPost) {
-
-    }
-
-    func trash(_ post: AbstractPost) {
+    func didTapTrash(on post: AbstractPost) {
         guard reachabilityUtility.isInternetReachable() else {
             let offlineMessage = NSLocalizedString(
                 "Unable to trash posts while offline. Please try again later.",
@@ -146,23 +112,38 @@ final class PostListViewModel: PostListViewModelInputs, PostListViewModelOutputs
         )
     }
 
+    func didTapRetry(on post: AbstractPost) {
+        PostCoordinator.shared.save(post)
+    }
+
+    func didTapCancelAutoUpload(on post: AbstractPost) {
+        PostCoordinator.shared.cancelAutoUploadOf(post)
+    }
+
+    func share(_ post: AbstractPost, fromView view: UIView) {
+        // UI coupled. It should be removed from the protocol.
+    }
+
+    // Functions below need to be extracted from `AbstractPostListViewController`.
+    // If a `AbstractPostListViewModel` is created, this class can subclass that and
+    // call super's functions in these.
+    func view(_ post: AbstractPost) {
+
+    }
+
+    func duplicate(_ post: AbstractPost) {
+
+    }
+
+    func publish(_ post: AbstractPost) {
+
+    }
+
     func restore(_ post: AbstractPost) {
 
     }
 
     func draft(_ post: AbstractPost) {
-
-    }
-
-    func retry(_ post: AbstractPost) {
-
-    }
-
-    func cancelAutoUpload(_ post: AbstractPost) {
-
-    }
-
-    func share(_ post: AbstractPost, fromView view: UIView) {
 
     }
 
@@ -183,5 +164,32 @@ private extension PostListViewModel {
         }
 
         return properties
+    }
+
+    private func viewStatsForPost(_ apost: AbstractPost) {
+        // Check the blog
+        let blog = apost.blog
+
+        guard blog.supports(.stats) else {
+            // Needs Jetpack.
+            return
+        }
+
+        WPAnalytics.track(.postListStatsAction, withProperties: propertiesForAnalytics())
+
+        // Push the Post Stats ViewController
+        guard let postID = apost.postID as? Int else {
+            return
+        }
+
+        SiteStatsInformation.sharedInstance.siteTimeZone = blog.timeZone
+        SiteStatsInformation.sharedInstance.oauth2Token = blog.authToken
+        SiteStatsInformation.sharedInstance.siteID = blog.dotComID
+
+        guard let permaLink = apost.permaLink else {
+            return
+        }
+        let postURL = URL(string: permaLink as String)
+        statsConfigured?(postID, apost.titleForDisplay(), postURL)
     }
 }
