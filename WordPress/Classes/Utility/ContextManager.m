@@ -22,6 +22,7 @@ static ContextManager *_instance;
 @property (nonatomic, strong) NSManagedObjectModel *managedObjectModel;
 @property (nonatomic, strong) NSManagedObjectContext *mainContext;
 @property (nonatomic, strong) NSManagedObjectContext *writerContext;
+@property (nonatomic, strong) NSManagedObjectContext *theLongRunningWriterContext;
 @property (nonatomic, assign) BOOL migrationFailed;
 @property (nonatomic, strong) NSString *modelName;
 @property (nonatomic, strong) NSURL *storeURL;
@@ -58,6 +59,7 @@ static ContextManager *_instance;
         // ensure they are only created once.
         [self createWriterContext];
         [self createMainContext];
+        self.theLongRunningWriterContext = [self newDerivedContext];
         [self startListeningToMainContextNotifications];
     }
 
@@ -197,7 +199,7 @@ static ContextManager *_instance;
 
 - (void)saveUsingBlock:(void (^)(NSManagedObjectContext *context))aBlock
 {
-    NSManagedObjectContext *context = [self newDerivedContext];
+    NSManagedObjectContext *context = self.theLongRunningWriterContext;
     [context performBlockAndWait:^{
         aBlock(context);
 
@@ -207,7 +209,7 @@ static ContextManager *_instance;
 
 - (void)saveUsingBlock:(void (^)(NSManagedObjectContext *context))aBlock completion:(void (^)(void))completion
 {
-    NSManagedObjectContext *context = [self newDerivedContext];
+    NSManagedObjectContext *context = self.theLongRunningWriterContext;
     [context performBlock:^{
         aBlock(context);
 
