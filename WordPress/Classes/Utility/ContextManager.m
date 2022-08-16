@@ -385,3 +385,28 @@ static ContextManager *_instance;
 }
 
 @end
+
+BOOL wpios_nested_save_call(NSManagedObjectContext *context) {
+    if (context.concurrencyType != NSPrivateQueueConcurrencyType) {
+        return NO;
+    }
+
+    const char *label = dispatch_queue_get_label(DISPATCH_CURRENT_QUEUE_LABEL);
+    NSString *currentQueue = [NSString stringWithUTF8String:label];
+
+    if (![currentQueue hasPrefix:@"NSManagedObjectContext"]) {
+        return NO;
+    }
+
+    NSString *expectedQueue = [NSString stringWithFormat: @"NSManagedObjectContext %p", context];
+
+    NSLog(@"'%@' <=> '%@'", currentQueue, expectedQueue);
+
+    if ([currentQueue isEqualToString:expectedQueue]) {
+        return NO;
+    }
+
+    NSLog(@"☝️ nested `NSManagedObjectContext.perform`");
+
+    return YES;
+}
