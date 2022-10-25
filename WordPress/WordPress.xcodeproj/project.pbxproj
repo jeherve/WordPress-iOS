@@ -16750,7 +16750,6 @@
 			);
 			dependencies = (
 				096A92FD26E2A0AE00448C68 /* PBXTargetDependency */,
-				93E5284819A7741A003A1A9C /* PBXTargetDependency */,
 				932225B01C7CE50300443B02 /* PBXTargetDependency */,
 				7457667B202B558C00F42E40 /* PBXTargetDependency */,
 				7358E6BE210BD318002323EB /* PBXTargetDependency */,
@@ -23467,10 +23466,6 @@
 			isa = PBXTargetDependency;
 			target = 932225A61C7CE50300443B02 /* WordPressShareExtension */;
 			targetProxy = 932225AF1C7CE50300443B02 /* PBXContainerItemProxy */;
-		};
-		93E5284819A7741A003A1A9C /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			targetProxy = 93E5284719A7741A003A1A9C /* PBXContainerItemProxy */;
 		};
 		E16AB93F14D978520047A2E5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
