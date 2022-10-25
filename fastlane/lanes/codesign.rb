@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+GUTENBERG_DEVELOPMENT_BUNDLE_IDENTIFIER = 'org.wordpress.gutenberg.development'
+
 # Lanes related to Code Signing and Provisioning Profiles
 #
 platform :ios do
@@ -12,7 +14,11 @@ platform :ios do
   lane :register_new_device do |options|
     device_name = UI.input('Device Name: ') if options[:device_name].nil?
     device_id = UI.input('Device ID: ') if options[:device_id].nil?
-    all_bundle_ids = ALL_WORDPRESS_BUNDLE_IDENTIFIERS + ALL_JETPACK_BUNDLE_IDENTIFIERS
+    all_bundle_ids = [
+      *ALL_WORDPRESS_BUNDLE_IDENTIFIERS,
+      *ALL_JETPACK_BUNDLE_IDENTIFIERS,
+      GUTENBERG_DEVELOPMENT_BUNDLE_IDENTIFIER
+    ]
 
     UI.message "Registering #{device_name} with ID #{device_id} and registering it with any provisioning profiles associated with these bundle identifiers:"
     all_bundle_ids.each do |identifier|
