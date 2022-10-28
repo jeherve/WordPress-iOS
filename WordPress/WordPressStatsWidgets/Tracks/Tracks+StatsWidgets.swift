@@ -13,7 +13,7 @@ extension Tracks {
                                           widgetCountKey: widgetCountKey)
             }
 
-        case .loggedOut, .noData:
+        case .loggedOut, .noStats:
             trackWidgetUpdated(widgetKind: widgetKind,
                                       widgetCountKey: widgetCountKey)
         }

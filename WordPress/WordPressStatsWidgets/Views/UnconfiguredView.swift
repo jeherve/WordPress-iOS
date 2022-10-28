@@ -2,7 +2,7 @@ import SwiftUI
 
 struct UnconfiguredView: View {
 
-    var widgetKind: StatsWidgetKind
+    var timelineEntry: StatsWidgetEntry
 
     var body: some View {
         Text(unconfiguredMessage)
@@ -13,14 +13,19 @@ struct UnconfiguredView: View {
     }
 
     var unconfiguredMessage: LocalizedString {
-        switch widgetKind {
-        case .today:
-            return AppConfiguration.Widget.Localization.unconfiguredViewTodayTitle
-        case .allTime:
-            return AppConfiguration.Widget.Localization.unconfiguredViewAllTimeTitle
-        case .thisWeek:
-            return AppConfiguration.Widget.Localization.unconfiguredViewThisWeekTitle
+        switch timelineEntry {
+        case .loggedOut(let widgetKind):
+            switch widgetKind {
+            case .today:
+                return AppConfiguration.Widget.Localization.unconfiguredViewTodayTitle
+            case .allTime:
+                return AppConfiguration.Widget.Localization.unconfiguredViewAllTimeTitle
+            case .thisWeek:
+                return AppConfiguration.Widget.Localization.unconfiguredViewThisWeekTitle
+            }
         case .noStats:
+            return LocalizableStrings.noDataViewTitle
+        default:
             return LocalizableStrings.noDataViewTitle
         }
     }
@@ -28,6 +33,6 @@ struct UnconfiguredView: View {
 
 struct PlaceholderView_Previews: PreviewProvider {
     static var previews: some View {
-        UnconfiguredView(widgetKind: .today)
+        UnconfiguredView(timelineEntry: .loggedOut(.today))
     }
 }
