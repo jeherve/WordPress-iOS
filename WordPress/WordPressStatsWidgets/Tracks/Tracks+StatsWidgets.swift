@@ -5,17 +5,17 @@ import WidgetKit
 ///
 extension Tracks {
 
-    func trackWidgetUpdatedIfNeeded(entry: StatsWidgetEntry, widgetKind: String, widgetCountKey: String) {
+    func trackWidgetUpdatedIfNeeded(entry: StatsWidgetEntry) {
         switch entry {
-        case .siteSelected(_, let context):
+        case .siteSelected(_, let widgetKind, let context):
             if !context.isPreview {
-                trackWidgetUpdated(widgetKind: widgetKind,
-                                          widgetCountKey: widgetCountKey)
+                trackWidgetUpdated(widgetKind: widgetKind.rawValue,
+                                   widgetCountKey: widgetKind.properties)
             }
 
-        case .loggedOut, .noStats:
-            trackWidgetUpdated(widgetKind: widgetKind,
-                                      widgetCountKey: widgetCountKey)
+        case .loggedOut(let widgetKind), .noStats(let widgetKind):
+            trackWidgetUpdated(widgetKind: widgetKind.rawValue,
+                               widgetCountKey: widgetKind.properties)
         }
     }
 

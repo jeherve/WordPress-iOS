@@ -16,7 +16,7 @@ struct StatsWidgetsView: View {
                 .widgetURL(nil)
                 // This seems to prevent a bug where the URL for subsequent widget
                 // types is being triggered if one isn't specified here.
-        case .siteSelected(let content, _):
+        case .siteSelected(let content, _, _):
             if let viewData = makeGroupedViewData(from: content) {
                 switch family {
 

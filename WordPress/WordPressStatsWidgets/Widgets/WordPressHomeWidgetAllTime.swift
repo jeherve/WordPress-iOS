@@ -25,9 +25,7 @@ struct WordPressHomeWidgetAllTime: Widget {
         ) { (entry: StatsWidgetEntry) -> StatsWidgetsView in
 
             defer {
-                tracks.trackWidgetUpdatedIfNeeded(entry: entry,
-                                                  widgetKind: AppConfiguration.Widget.Stats.allTimeKind,
-                                                  widgetCountKey: AppConfiguration.Widget.Stats.allTimeProperties)
+                tracks.trackWidgetUpdatedIfNeeded(entry: entry)
             }
 
             return StatsWidgetsView(timelineEntry: entry)

@@ -44,9 +44,7 @@ struct WordPressHomeWidgetThisWeek: Widget {
         ) { (entry: StatsWidgetEntry) -> StatsWidgetsView in
 
             defer {
-                tracks.trackWidgetUpdatedIfNeeded(entry: entry,
-                                                  widgetKind: AppConfiguration.Widget.Stats.thisWeekKind,
-                                                  widgetCountKey: AppConfiguration.Widget.Stats.thisWeekProperties)
+                tracks.trackWidgetUpdatedIfNeeded(entry: entry)
             }
 
             return StatsWidgetsView(timelineEntry: entry)

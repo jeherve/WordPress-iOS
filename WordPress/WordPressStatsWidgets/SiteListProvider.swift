@@ -18,7 +18,7 @@ struct SiteListProvider<T: HomeWidgetData>: IntentTimelineProvider {
     }
 
     func placeholder(in context: Context) -> StatsWidgetEntry {
-        StatsWidgetEntry.siteSelected(placeholderContent, context)
+        StatsWidgetEntry.siteSelected(placeholderContent, widgetKind, context)
     }
 
     func getSnapshot(for configuration: SelectSiteIntent, in context: Context, completion: @escaping (StatsWidgetEntry) -> Void) {
@@ -28,14 +28,14 @@ struct SiteListProvider<T: HomeWidgetData>: IntentTimelineProvider {
               let widgetData = widgetData(for: siteIdentifier) else {
 
             if let siteID = defaultSiteID, let content = T.read()?[siteID] {
-                completion(.siteSelected(content, context))
+                completion(.siteSelected(content, widgetKind, context))
             } else {
-                completion(.siteSelected(placeholderContent, context))
+                completion(.siteSelected(placeholderContent, widgetKind, context))
             }
             return
         }
 
-        completion(.siteSelected(widgetData, context))
+        completion(.siteSelected(widgetData, widgetKind, context))
     }
 
     func getTimeline(for configuration: SelectSiteIntent, in context: Context, completion: @escaping (Timeline<StatsWidgetEntry>) -> Void) {
@@ -63,7 +63,7 @@ struct SiteListProvider<T: HomeWidgetData>: IntentTimelineProvider {
         // if cached data are "too old", refresh them from the backend, otherwise keep them
         guard elapsedTime > minElapsedTimeToRefresh else {
 
-            privateCompletion(.siteSelected(widgetData, context))
+            privateCompletion(.siteSelected(widgetData, widgetKind, context))
             return
         }
 
@@ -73,11 +73,11 @@ struct SiteListProvider<T: HomeWidgetData>: IntentTimelineProvider {
             case .failure(let error):
                 DDLogError("StatsWidgets: failed to fetch remote stats. Returned error: \(error.localizedDescription)")
 
-                privateCompletion(.siteSelected(widgetData, context))
+                privateCompletion(.siteSelected(widgetData, widgetKind, context))
 
             case .success(let newWidgetData):
 
-                privateCompletion(.siteSelected(newWidgetData, context))
+                privateCompletion(.siteSelected(newWidgetData, widgetKind, context))
             }
         }
     }
@@ -111,8 +111,30 @@ private extension SiteListProvider {
     }
 }
 
-enum StatsWidgetKind {
+enum StatsWidgetKind: String {
     case today
     case allTime
     case thisWeek
+
+    var rawValue: String {
+        switch self {
+        case .today:
+            return AppConfiguration.Widget.Stats.todayKind
+        case .allTime:
+            return AppConfiguration.Widget.Stats.allTimeKind
+        case .thisWeek:
+            return AppConfiguration.Widget.Stats.thisWeekKind
+        }
+    }
+
+    var properties: String {
+        switch self {
+        case .today:
+            return AppConfiguration.Widget.Stats.todayProperties
+        case .allTime:
+            return AppConfiguration.Widget.Stats.allTimeProperties
+        case .thisWeek:
+            return AppConfiguration.Widget.Stats.thisWeekProperties
+        }
+    }
 }
