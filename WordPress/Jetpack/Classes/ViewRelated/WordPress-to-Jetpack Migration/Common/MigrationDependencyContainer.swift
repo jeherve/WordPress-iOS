@@ -25,6 +25,9 @@ struct MigrationViewControllerFactory {
         case .done:
             return makeDoneViewController()
         case .dismiss:
+            // There's probably a better place to clear this?
+            print("🟣 Cleared migration flag")
+            UserDefaults(suiteName: WPAppGroupName)?.removeObject(forKey: "data-migration-ready")
             return nil
         }
     }

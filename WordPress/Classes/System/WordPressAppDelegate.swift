@@ -107,6 +107,8 @@ class WordPressAppDelegate: UIResponder, UIApplicationDelegate {
         updateRemoteConfig()
 
         window?.makeKeyAndVisible()
+        
+        migrateAccountData()
 
         // Restore a disassociated account prior to fixing tokens.
         AccountService(managedObjectContext: mainContext).restoreDisassociatedAccountIfNecessary()
@@ -665,6 +667,26 @@ extension WordPressAppDelegate {
 
     func updateRemoteConfig() {
         RemoteConfigStore.shared.update()
+    }
+    
+    func migrateAccountData() {
+        guard FeatureFlag.sharedLogin.enabled,
+              AppConfiguration.isJetpack,
+              let sharedDefaults = UserDefaults(suiteName: WPAppGroupName),
+              sharedDefaults.bool(forKey: "data-migration-ready"),
+              !AccountHelper.isLoggedIn else {
+            return
+        }
+        
+        let migrator = DataMigrator()
+        migrator.importData { result in
+            switch result {
+            case .success(_):
+                DDLogInfo("Successfully imported account data")
+            case .failure(let error):
+                DDLogError("Failed to import data: \(error)")
+            }
+        }
     }
 }
 

@@ -24,6 +24,13 @@ class MigrationNavigationController: UINavigationController {
     init(coordinator: MigrationFlowCoordinator, factory: MigrationViewControllerFactory) {
         self.coordinator = coordinator
         self.factory = factory
+        // Possible approach we can take:
+        // If the initial view controller is nil that means there's no account data and the automatic data import failed. When
+        // the error screen is created, the coordinator should be set to an 'error' step and the error UI presented. In the error screen,
+        // the 'Try again' button can attempt to import the data again.
+        //
+        // One issue that would need to be solved with this approach is we need to check if we have to run some of the startup sequence
+        // again after importing the data. Currently, the automatic import is placed before the startup sequence.
         if let initialViewController = factory.initialViewController() {
             super.init(rootViewController: initialViewController)
         } else {

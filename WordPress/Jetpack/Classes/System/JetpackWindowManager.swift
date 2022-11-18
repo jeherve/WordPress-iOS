@@ -43,6 +43,10 @@ class JetpackWindowManager: WindowManager {
 
     // TODO: Add logic in here to trigger migration UI if needed
     private var shouldShowMigrationUI: Bool {
-        false
+        guard let sharedDefaults = UserDefaults(suiteName: WPAppGroupName) else {
+            return false
+        }
+        
+        return FeatureFlag.sharedLogin.enabled && sharedDefaults.bool(forKey: "data-migration-ready")
     }
 }

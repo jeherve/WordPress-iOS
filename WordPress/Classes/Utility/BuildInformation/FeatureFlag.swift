@@ -114,11 +114,11 @@ enum FeatureFlag: Int, CaseIterable, OverrideableFlag {
         case .jetpackPowered:
             return true
         case .jetpackPoweredBottomSheet:
-            return false
+            return true
         case .sharedUserDefaults:
             return false
         case .sharedLogin:
-            return false
+            return true
         case .newJetpackLandingScreen:
             return true
         case .newWordPressLandingScreen:
