@@ -117,7 +117,7 @@ private extension GridCell {
     ///   - action: An action to perform when the button is tapped.
     /// - Returns: The configured button.
     func makeGridButton(image: UIImage?, action: @escaping () -> Void) -> UIButton {
-        let button = ClosureButton(frame: .zero, closure: action)
+        let button = UIButton(frame: .zero, primaryAction: UIAction(handler: { _ in action() }))
         button.setImage(image, for: .normal)
         button.translatesAutoresizingMaskIntoConstraints = false
 
@@ -150,24 +150,5 @@ private extension GridCell {
 
         // grid stack view
         static let gridIteminterItemSpacing: CGFloat = 8
-    }
-}
-
-//TODO: Remove with iOS 14
-class ClosureButton: UIButton {
-    let closure: () -> Void
-
-    init(frame: CGRect, closure: @escaping () -> Void) {
-        self.closure = closure
-        super.init(frame: frame)
-        self.addTarget(self, action: #selector(tapped), for: .touchUpInside)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    @objc func tapped() {
-        closure()
     }
 }
