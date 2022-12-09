@@ -138,11 +138,7 @@ private class RemoteNotificationRegisterMock: RemoteNotificationRegister {
 }
 
 private class RemoteFeatureFlagStoreMock: RemoteFeatureFlagStore {
-    var value = false {
-        didSet {
-            try? FeatureFlagOverrideStore().override(FeatureFlag.jetpackMigrationPreventDuplicateNotifications, withValue: value)
-        }
-    }
+    var value = false
 
     override func value(for flag: OverrideableFlag) -> Bool {
         return value
