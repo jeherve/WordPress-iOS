@@ -1,19 +1,19 @@
 struct MigrationDependencyContainer {
 
-    let migrationCoordinator = MigrationFlowCoordinator()
+    let viewModel = MigrationFlowViewModel()
 
     func makeInitialViewController() -> UIViewController {
-        MigrationNavigationController(coordinator: migrationCoordinator,
-                                      factory: MigrationViewControllerFactory(coordinator: migrationCoordinator))
+        MigrationNavigationController(viewModel: viewModel,
+                                      factory: MigrationViewControllerFactory(viewModel: viewModel))
     }
 }
 
 struct MigrationViewControllerFactory {
 
-    let coordinator: MigrationFlowCoordinator
+    let flowViewModel: MigrationFlowViewModel
 
-    init(coordinator: MigrationFlowCoordinator) {
-        self.coordinator = coordinator
+    init(viewModel: MigrationFlowViewModel) {
+        self.flowViewModel = viewModel
     }
 
     func viewController(for step: MigrationStep) -> UIViewController? {
@@ -30,7 +30,7 @@ struct MigrationViewControllerFactory {
     }
 
     func initialViewController() -> UIViewController? {
-        viewController(for: coordinator.currentStep)
+        viewController(for: flowViewModel.currentStep)
     }
 
     private func makeAccount() -> WPAccount? {
@@ -64,14 +64,14 @@ struct MigrationViewControllerFactory {
         let viewModel = makeWelcomeViewModel(handlers: handlers)
 
         let viewController = MigrationWelcomeViewController(viewModel: viewModel)
-        handlers.primary = { [weak coordinator] in coordinator?.transitionToNextStep() }
+        handlers.primary = { [weak flowViewModel] in flowViewModel?.transitionToNextStep() }
         handlers.secondary = makeSupportViewControllerRouter(with: viewController)
 
         return viewController
     }
 
     private func makeNotificationsViewModel() -> MigrationNotificationsViewModel {
-        MigrationNotificationsViewModel(coordinator: coordinator)
+        MigrationNotificationsViewModel(viewModel: flowViewModel)
     }
 
     private func makeNotificationsViewController() -> UIViewController {
@@ -79,7 +79,7 @@ struct MigrationViewControllerFactory {
     }
 
     private func makeDoneViewModel() -> MigrationDoneViewModel {
-        MigrationDoneViewModel(coordinator: coordinator)
+        MigrationDoneViewModel(viewModel: flowViewModel)
     }
 
     private func makeDoneViewController() -> UIViewController {

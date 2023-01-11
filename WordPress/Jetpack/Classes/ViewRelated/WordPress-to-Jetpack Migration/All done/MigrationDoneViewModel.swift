@@ -2,15 +2,15 @@ class MigrationDoneViewModel {
 
     let configuration: MigrationStepConfiguration
 
-    init(coordinator: MigrationFlowCoordinator, tracker: MigrationAnalyticsTracker = .init()) {
+    init(viewModel: MigrationFlowViewModel, tracker: MigrationAnalyticsTracker = .init()) {
 
         let headerConfiguration = MigrationHeaderConfiguration(step: .done)
 
         let centerViewConfigurartion = MigrationCenterViewConfiguration(step: .done)
 
-        let actionsConfiguration = MigrationActionsViewConfiguration(step: .done, primaryHandler: { [weak coordinator] in
+        let actionsConfiguration = MigrationActionsViewConfiguration(step: .done, primaryHandler: { [weak viewModel] in
             tracker.track(.thanksScreenFinishTapped)
-            coordinator?.transitionToNextStep()
+            viewModel?.transitionToNextStep()
         })
         configuration = MigrationStepConfiguration(headerConfiguration: headerConfiguration,
                                                    centerViewConfiguration: centerViewConfigurartion,

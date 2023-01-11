@@ -1,8 +1,7 @@
 import Combine
 import UserNotifications
 
-/// Coordinator for the migration to jetpack flow
-final class MigrationFlowCoordinator: ObservableObject {
+final class MigrationFlowViewModel: ObservableObject {
 
     // MARK: - Dependencies
 
@@ -45,7 +44,6 @@ final class MigrationFlowCoordinator: ObservableObject {
             break
         }
     }
-
 
     // MARK: - Helpers
 

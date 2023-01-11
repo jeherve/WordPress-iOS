@@ -121,7 +121,7 @@ private extension JetpackWindowManager {
             return
         }
         let container = MigrationDependencyContainer()
-        cancellable = container.migrationCoordinator.$currentStep
+        cancellable = container.viewModel.$currentStep
             .receive(on: DispatchQueue.main)
             .sink { [weak self] step in
                 guard let self = self, step == .dismiss else {

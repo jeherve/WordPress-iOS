@@ -4,20 +4,20 @@ class MigrationNotificationsViewModel {
 
     let configuration: MigrationStepConfiguration
 
-    init(coordinator: MigrationFlowCoordinator, tracker: MigrationAnalyticsTracker = .init()) {
+    init(viewModel: MigrationFlowViewModel, tracker: MigrationAnalyticsTracker = .init()) {
         let headerConfiguration = MigrationHeaderConfiguration(step: .notifications)
         let centerViewConfigurartion = MigrationCenterViewConfiguration(step: .notifications)
 
-        let primaryHandler = { [weak coordinator] in
+        let primaryHandler = { [weak viewModel] in
             tracker.track(.notificationsScreenContinueTapped)
-            InteractiveNotificationsManager.shared.requestAuthorization { [weak coordinator] authorized in
+            InteractiveNotificationsManager.shared.requestAuthorization { [weak viewModel] authorized in
                 UNUserNotificationCenter.current().getNotificationSettings { settings in
                     guard settings.authorizationStatus != .notDetermined else {
                         tracker.track(.notificationsScreenPermissionNotDetermined)
                         return
                     }
 
-                    coordinator?.transitionToNextStep()
+                    viewModel?.transitionToNextStep()
                     let event: MigrationEvent = authorized ? .notificationsScreenPermissionGranted : .notificationsScreenPermissionDenied
                     tracker.track(event)
 
@@ -27,9 +27,9 @@ class MigrationNotificationsViewModel {
                 }
             }
         }
-        let secondaryHandler = { [weak coordinator] in
+        let secondaryHandler = { [weak viewModel] in
             tracker.track(.notificationsScreenDecideLaterButtonTapped)
-            coordinator?.transitionToNextStep()
+            viewModel?.transitionToNextStep()
         }
         let actionsConfiguration = MigrationActionsViewConfiguration(step: .notifications,
                                                                      primaryHandler: primaryHandler,

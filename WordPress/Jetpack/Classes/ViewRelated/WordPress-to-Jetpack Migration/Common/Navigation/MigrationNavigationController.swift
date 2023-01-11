@@ -2,10 +2,13 @@ import Combine
 import UIKit
 
 class MigrationNavigationController: UINavigationController {
-    /// Navigation coordinator
-    private let coordinator: MigrationFlowCoordinator
+
+    /// Navigation view model
+    private let viewModel: MigrationFlowViewModel
+
     /// The view controller factory used to push view controllers on the stack
     private let factory: MigrationViewControllerFactory
+
     /// Receives state changes to set the navigation stack accordingly
     private var cancellable: AnyCancellable?
 
@@ -28,8 +31,8 @@ class MigrationNavigationController: UINavigationController {
         return .portrait
     }
 
-    init(coordinator: MigrationFlowCoordinator, factory: MigrationViewControllerFactory) {
-        self.coordinator = coordinator
+    init(viewModel: MigrationFlowViewModel, factory: MigrationViewControllerFactory) {
+        self.viewModel = viewModel
         self.factory = factory
         if let initialViewController = factory.initialViewController() {
             super.init(rootViewController: initialViewController)
@@ -60,7 +63,7 @@ class MigrationNavigationController: UINavigationController {
     }
 
     private func listenForStateChanges() {
-        cancellable = coordinator.$currentStep
+        cancellable = viewModel.$currentStep
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] step in
