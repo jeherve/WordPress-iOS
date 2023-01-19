@@ -15,6 +15,7 @@ class SiteStatsInsightsViewModel: Observable {
     let changeDispatcher = Dispatcher<Void>()
 
     private weak var siteStatsInsightsDelegate: SiteStatsInsightsDelegate?
+    private weak var viewsAndVisitorsDelegate: StatsInsightsViewsAndVisitorsDelegate?
 
     private let insightsStore: StatsInsightsStore
     private let periodStore: StatsPeriodStore
@@ -42,21 +43,27 @@ class SiteStatsInsightsViewModel: Observable {
 
     private var mostRecentChartData: StatsSummaryTimeIntervalData?
 
+    private var selectedViewsVisitorsSegment: StatsSegmentedControlData.Segment = .views
+
     // MARK: - Constructor
 
     init(insightsToShow: [InsightType],
          insightsDelegate: SiteStatsInsightsDelegate,
+         viewsAndVisitorsDelegate: StatsInsightsViewsAndVisitorsDelegate?,
          insightsStore: StatsInsightsStore,
          pinnedItemStore: SiteStatsPinnedItemStore?,
          periodStore: StatsPeriodStore = StoreContainer.shared.statsPeriod) {
         self.siteStatsInsightsDelegate = insightsDelegate
+        self.viewsAndVisitorsDelegate = viewsAndVisitorsDelegate
         self.insightsToShow = insightsToShow
         self.insightsStore = insightsStore
         self.pinnedItemStore = pinnedItemStore
         self.periodStore = periodStore
         let viewsCount = insightsStore.getAllTimeStats()?.viewsCount ?? 0
         self.itemToDisplay = pinnedItemStore?.itemToDisplay(for: viewsCount)
-        self.lastRequestedDate = StatsDataHelper.currentDateForSite()
+
+        // Exclude today's data for weekly insights
+        self.lastRequestedDate = StatsDataHelper.yesterdayDateForSite()
         self.lastRequestedPeriod = StatsPeriodUnit.day
 
         insightsChangeReceipt = self.insightsStore.onChange { [weak self] in
@@ -65,6 +72,7 @@ class SiteStatsInsightsViewModel: Observable {
 
         if FeatureFlag.statsNewInsights.enabled {
             periodChangeReceipt = self.periodStore.onChange { [weak self] in
+                self?.updateMostRecentChartData(self?.periodStore.getSummary())
                 self?.emitChange()
             }
         }
@@ -90,6 +98,7 @@ class SiteStatsInsightsViewModel: Observable {
     ///
     func refreshInsights(forceRefresh: Bool = false) {
         ActionDispatcher.dispatch(InsightAction.refreshInsights(forceRefresh: forceRefresh))
+        startFetchingPeriodOverview()
     }
 
     // MARK: - Table Model
@@ -101,11 +110,6 @@ class SiteStatsInsightsViewModel: Observable {
         if insightsToShow.isEmpty ||
             (fetchingFailed() && !containsCachedData()) {
             return ImmuTable.Empty
-        }
-
-        let summaryErrorBlock: AsyncBlock<[ImmuTableRow]> = {
-            return [PeriodEmptyCellHeaderRow(),
-                    StatsErrorRow(rowStatus: .error, statType: .period, statSection: nil)]
         }
 
         insightsToShow.forEach { insightType in
@@ -122,12 +126,18 @@ class SiteStatsInsightsViewModel: Observable {
                             return self?.mostRecentChartData != nil
                         },
                         block: { [weak self] in
-                            return self?.overviewTableRows() ?? summaryErrorBlock()
+                            return self?.overviewTableRows() ?? [errorBlock(.insightsViewsVisitors)]
                         }, loading: {
-                    return [PeriodEmptyCellHeaderRow(),
-                            StatsGhostChartImmutableRow()]
-                }, error: summaryErrorBlock))
+                            return [StatsGhostChartImmutableRow()]
+                        }, error: {
+                            return [errorBlock(.insightsViewsVisitors)]
+                        }))
             case .growAudience:
+                /// Grow Audience is an additional informational card that is not added by the user, no need to show it if fails to load
+                guard insightsStore.allTimeStatus != . error else {
+                    return
+                }
+
                 tableRows.append(blocks(for: .growAudience,
                                         type: .insights,
                                         status: insightsStore.allTimeStatus,
@@ -177,9 +187,12 @@ class SiteStatsInsightsViewModel: Observable {
                 tableRows.append(InsightCellHeaderRow(statSection: StatSection.insightsLikesTotals,
                                                       siteStatsInsightsDelegate: siteStatsInsightsDelegate))
                 tableRows.append(blocks(for: .likesTotals,
-                                           type: .period,
-                                           status: periodStore.summaryLikesStatus,
-                                           block: {
+                                        type: .period,
+                                        status: periodStore.summaryStatus,
+                                        checkingCache: { [weak self] in
+                                            return self?.mostRecentChartData != nil
+                                        },
+                                        block: {
                     return TotalInsightStatsRow(dataRow: createLikesTotalInsightsRow(), statSection: .insightsLikesTotals, siteStatsInsightsDelegate: siteStatsInsightsDelegate)
                 }, loading: {
                     return StatsGhostTwoColumnImmutableRow()
@@ -190,9 +203,12 @@ class SiteStatsInsightsViewModel: Observable {
                 tableRows.append(InsightCellHeaderRow(statSection: StatSection.insightsCommentsTotals,
                                                       siteStatsInsightsDelegate: siteStatsInsightsDelegate))
                 tableRows.append(blocks(for: .commentsTotals,
-                                           type: .period,
-                                           status: periodStore.summaryLikesStatus,
-                                           block: {
+                                        type: .period,
+                                        status: periodStore.summaryStatus,
+                                        checkingCache: { [weak self] in
+                                            return self?.mostRecentChartData != nil
+                                        },
+                                        block: {
                     return TotalInsightStatsRow(dataRow: createCommentsTotalInsightsRow(), statSection: .insightsCommentsTotals, siteStatsInsightsDelegate: siteStatsInsightsDelegate)
                 }, loading: {
                     return StatsGhostTwoColumnImmutableRow()
@@ -398,12 +414,16 @@ class SiteStatsInsightsViewModel: Observable {
         pinnedItemStore?.markPinnedItemAsHidden(item)
     }
 
-    static func intervalData(_ statsSummaryTimeIntervalData: StatsSummaryTimeIntervalData?, summaryType: StatsSummaryType) -> (count: Int, prevCount: Int, difference: Int, percentage: Int) {
+    func updateViewsAndVisitorsSegment(_ selectedSegment: StatsSegmentedControlData.Segment) {
+        selectedViewsVisitorsSegment = selectedSegment
+    }
+
+    static func intervalData(_ statsSummaryTimeIntervalData: StatsSummaryTimeIntervalData?, summaryType: StatsSummaryType, periodEndDate: Date? = nil) -> (count: Int, prevCount: Int, difference: Int, percentage: Int) {
         guard let statsSummaryTimeIntervalData = statsSummaryTimeIntervalData else {
             return (0, 0, 0, 0)
         }
 
-        let splitSummaryTimeIntervalData = SiteStatsInsightsViewModel.splitStatsSummaryTimeIntervalData(statsSummaryTimeIntervalData)
+        let splitSummaryTimeIntervalData = SiteStatsInsightsViewModel.splitStatsSummaryTimeIntervalData(statsSummaryTimeIntervalData, periodEndDate: periodEndDate)
 
         var currentCount: Int = 0
         var previousCount: Int = 0
@@ -504,13 +524,14 @@ private extension SiteStatsInsightsViewModel {
     // MARK: - Create Table Rows
 
     func overviewTableRows() -> [ImmuTableRow] {
-        let periodSummary = periodStore.getSummary()
-        updateMostRecentChartData(periodSummary)
-
         let periodDate = self.lastRequestedDate
 
-        return SiteStatsImmuTableRows.viewVisitorsImmuTableRows(mostRecentChartData, periodDate: periodDate,
-                statsLineChartViewDelegate: statsLineChartViewDelegate, siteStatsInsightsDelegate: siteStatsInsightsDelegate)
+        return SiteStatsImmuTableRows.viewVisitorsImmuTableRows(mostRecentChartData,
+                                                                selectedSegment: selectedViewsVisitorsSegment,
+                                                                periodDate: periodDate,
+                                                                statsLineChartViewDelegate: statsLineChartViewDelegate,
+                                                                siteStatsInsightsDelegate: siteStatsInsightsDelegate,
+                                                                viewsAndVisitorsDelegate: viewsAndVisitorsDelegate)
     }
 
     func createAllTimeStatsRows() -> [StatsTwoColumnRowData] {
@@ -605,17 +626,11 @@ private extension SiteStatsInsightsViewModel {
     }
 
     func createLikesTotalInsightsRow() -> StatsTotalInsightsData {
-        let periodSummary = periodStore.getSummary()
-        updateMostRecentChartData(periodSummary)
-
-        return StatsTotalInsightsData.createTotalInsightsData(periodStore: periodStore, insightsStore: insightsStore, statsSummaryType: .likes)
+        return StatsTotalInsightsData.createTotalInsightsData(periodSummary: periodStore.getSummary(), insightsStore: insightsStore, statsSummaryType: .likes)
     }
 
     func createCommentsTotalInsightsRow() -> StatsTotalInsightsData {
-        let periodSummary = periodStore.getSummary()
-        updateMostRecentChartData(periodSummary)
-
-        return StatsTotalInsightsData.createTotalInsightsData(periodStore: periodStore, insightsStore: insightsStore, statsSummaryType: .comments)
+        return StatsTotalInsightsData.createTotalInsightsData(periodSummary: periodStore.getSummary(), insightsStore: insightsStore, statsSummaryType: .comments)
     }
 
     func createFollowerTotalInsightsRow() -> StatsTotalInsightsData {
@@ -722,17 +737,17 @@ private extension SiteStatsInsightsViewModel {
         dataRows.append(StatsTwoColumnRowData.init(leftColumnName: AnnualSiteStats.totalComments,
                                                    leftColumnData: annualInsights.annualInsightsTotalCommentsCount.abbreviatedString(),
                                                    rightColumnName: AnnualSiteStats.commentsPerPost,
-                                                   rightColumnData: Int(round(annualInsights.annualInsightsAverageCommentsCount)).abbreviatedString()))
+                                                   rightColumnData: annualInsights.annualInsightsAverageCommentsCount.abbreviatedString()))
 
         dataRows.append(StatsTwoColumnRowData.init(leftColumnName: AnnualSiteStats.totalLikes,
                                                    leftColumnData: annualInsights.annualInsightsTotalLikesCount.abbreviatedString(),
                                                    rightColumnName: AnnualSiteStats.likesPerPost,
-                                                   rightColumnData: Int(round(annualInsights.annualInsightsAverageLikesCount)).abbreviatedString()))
+                                                   rightColumnData: annualInsights.annualInsightsAverageLikesCount.abbreviatedString()))
 
         dataRows.append(StatsTwoColumnRowData.init(leftColumnName: AnnualSiteStats.totalWords,
                                                    leftColumnData: annualInsights.annualInsightsTotalWordsCount.abbreviatedString(),
                                                    rightColumnName: AnnualSiteStats.wordsPerPost,
-                                                   rightColumnData: Int(round(annualInsights.annualInsightsAverageWordsCount)).abbreviatedString()))
+                                                   rightColumnData: annualInsights.annualInsightsAverageWordsCount.abbreviatedString()))
 
         return dataRows
 
@@ -833,7 +848,9 @@ private extension SiteStatsInsightsViewModel {
     }
 
     func updateMostRecentChartData(_ periodSummary: StatsSummaryTimeIntervalData?) {
-        if mostRecentChartData == nil {
+        if mostRecentChartData == nil,
+           let periodSummary = periodSummary,
+           periodSummary.periodEndDate >= lastRequestedDate.normalizedDate() {
             mostRecentChartData = periodSummary
         } else if let mostRecentChartData = mostRecentChartData,
                   let periodSummary = periodSummary,
@@ -852,20 +869,60 @@ extension SiteStatsInsightsViewModel: AsyncBlocksLoadable {
         return insightsStore
     }
 
-    public static func splitStatsSummaryTimeIntervalData(_ statsSummaryTimeIntervalData: StatsSummaryTimeIntervalData) ->
+
+    /// Splits the SummaryData into an array of 2 weeks, one for the current week and one for the previous week
+    ///
+    /// - Parameters:
+    ///     - statsSummaryTimeIntervalData: summarydata to split
+    ///     - periodEndDate: when the current period is not nil it will be used to pad forward until this date
+    /// - Returns: an array of 2 weeks
+    ///
+    public static func splitStatsSummaryTimeIntervalData(_ statsSummaryTimeIntervalData: StatsSummaryTimeIntervalData, periodEndDate: Date? = nil) ->
             [StatsSummaryTimeIntervalDataAsAWeek] {
-        switch statsSummaryTimeIntervalData.summaryData.count {
+
+        var summaryData = statsSummaryTimeIntervalData.summaryData
+
+        if let periodEndDate = periodEndDate {
+            summaryData = splitStatsSummaryTimeIntervalDataPadForward(statsSummaryTimeIntervalData, periodEndDate: periodEndDate)
+        }
+
+        return splitStatsSummaryData(summaryData)
+    }
+
+    /// When a periodEndDate is defined we pad forward the data to match the weeks view user experience on WordPress.com
+    ///
+    public static func splitStatsSummaryTimeIntervalDataPadForward(_ statsSummaryTimeIntervalData: StatsSummaryTimeIntervalData, periodEndDate: Date) ->
+            [StatsSummaryData] {
+        var summaryData = statsSummaryTimeIntervalData.summaryData
+        let daysElapsedSincePeriodEndDate = Calendar.autoupdatingCurrent.dateComponents([.day], from: statsSummaryTimeIntervalData.periodEndDate, to: periodEndDate).day ?? 0
+        if daysElapsedSincePeriodEndDate > 0 {
+            for i in 1...daysElapsedSincePeriodEndDate {
+                if let date = Calendar.autoupdatingCurrent.date(byAdding: .day, value: i, to: statsSummaryTimeIntervalData.periodEndDate) {
+                    summaryData.append(StatsSummaryData(period: .day,
+                                                        periodStartDate: date,
+                                                        viewsCount: 0,
+                                                        visitorsCount: 0,
+                                                        likesCount: 0,
+                                                        commentsCount: 0))
+                }
+            }
+        }
+
+        return summaryData
+    }
+
+    public static func splitStatsSummaryData(_ summaryData: [StatsSummaryData]) -> [StatsSummaryTimeIntervalDataAsAWeek] {
+        var summaryData = summaryData
+
+        switch summaryData.count {
         case let count where count == Constants.fourteenDays:
             // normal case api returns 14 rows
-            let summaryData = statsSummaryTimeIntervalData.summaryData[0..<Constants.fourteenDays]
-            return createStatsSummaryTimeIntervalDataAsAWeeks(summaryData: Array(summaryData))
+            return createStatsSummaryTimeIntervalDataAsAWeeks(summaryData: Array(summaryData[0..<Constants.fourteenDays]))
         case let count where count > Constants.fourteenDays:
             // when more than 14 rows we take the last 14 rows for most recent data
-            let summaryData = statsSummaryTimeIntervalData.summaryData[count-Constants.fourteenDays..<count]
-            return createStatsSummaryTimeIntervalDataAsAWeeks(summaryData: Array(summaryData))
+            return createStatsSummaryTimeIntervalDataAsAWeeks(summaryData: Array(summaryData[count-Constants.fourteenDays..<count]))
         case let count where count < Constants.fourteenDays:
             // when 0 to 14 rows presume the user could be new / doesn't have enough data.  Pad 0's to prev week
-            var summaryData = statsSummaryTimeIntervalData.summaryData
             summaryData.reverse()
 
             guard var date = summaryData.last?.periodStartDate else {
@@ -876,11 +933,11 @@ extension SiteStatsInsightsViewModel: AsyncBlocksLoadable {
                 if let newPeriodStartDate = Calendar.autoupdatingCurrent.date(byAdding: .day, value: -1, to: date) {
                     date = newPeriodStartDate
                     summaryData.append(StatsSummaryData(period: .day,
-                            periodStartDate: newPeriodStartDate,
-                            viewsCount: 0,
-                            visitorsCount: 0,
-                            likesCount: 0,
-                            commentsCount: 0))
+                                                        periodStartDate: newPeriodStartDate,
+                                                        viewsCount: 0,
+                                                        visitorsCount: 0,
+                                                        likesCount: 0,
+                                                        commentsCount: 0))
                 }
             }
 

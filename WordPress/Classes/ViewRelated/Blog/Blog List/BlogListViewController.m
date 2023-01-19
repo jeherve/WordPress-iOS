@@ -383,10 +383,8 @@ static NSInteger HideSearchMinSites = 3;
         });
     };
 
-    context = [[ContextManager sharedInstance] newDerivedContext];
-    BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:context];
-
-    [context performBlock:^{
+    [[ContextManager sharedInstance] performAndSaveUsingBlock:^(NSManagedObjectContext *context) {
+        BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:context];
         [blogService syncBlogsForAccount:defaultAccount success:^{
             completionBlock();
         } failure:^(NSError * _Nonnull error) {
@@ -711,6 +709,16 @@ static NSInteger HideSearchMinSites = 3;
     NSManagedObjectContext *context = [[ContextManager sharedInstance] mainContext];
     BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:context];
     [blogService removeBlog:blog];
+
+    if ([Feature enabled:FeatureFlagContentMigration] && [AppConfiguration isWordPress]) {
+        [ContentMigrationCoordinator.shared cleanupExportedDataIfNeeded];
+    }
+    
+    // Delete local data after removing the last site
+    if (!AccountHelper.isLoggedIn) {
+        [AccountHelper deleteAccountData];
+    }
+
     [self.tableView reloadData];
 }
 
@@ -874,8 +882,7 @@ static NSInteger HideSearchMinSites = 3;
 - (BOOL)shouldShowEditButton
 {
     NSManagedObjectContext *context = [[ContextManager sharedInstance] mainContext];
-    BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:context];
-    return [blogService blogCountForWPComAccounts] > 0;
+    return [Blog wpComBlogCountInContext:context] > 0;
 }
 
 - (void)updateBarButtons
@@ -946,12 +953,10 @@ static NSInteger HideSearchMinSites = 3;
             UIAlertAction *hideAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"Hide All", @"Hide All")
                                                                    style:UIAlertActionStyleDestructive
                                                                  handler:^(UIAlertAction *action){
-                                                                     NSManagedObjectContext *context = [[ContextManager sharedInstance] newDerivedContext];
-                                                                     [context performBlock:^{
+                                                                     [[ContextManager sharedInstance] performAndSaveUsingBlock:^(NSManagedObjectContext *context) {
                                                                          AccountService *accountService = [[AccountService alloc] initWithManagedObjectContext:context];
                                                                          WPAccount *account = [WPAccount lookupDefaultWordPressComAccountInContext:context];
                                                                          [accountService setVisibility:visible forBlogs:[account.blogs allObjects]];
-                                                                         [[ContextManager sharedInstance] saveContext:context];
                                                                      }];
                                                                  }];
             [alertController addAction:cancelAction];

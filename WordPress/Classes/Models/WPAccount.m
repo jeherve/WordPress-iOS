@@ -2,6 +2,7 @@
 #import "WordPress-Swift.h"
 
 static NSString * const WordPressComOAuthKeychainServiceName = @"public-api.wordpress.com";
+static NSString * const JetpackComOAuthKeychainServiceName = @"jetpack.public-api.wordpress.com";
 
 @interface WPAccount ()
 
@@ -83,12 +84,12 @@ static NSString * const WordPressComOAuthKeychainServiceName = @"public-api.word
 {
     if (authToken) {
         NSError *error = nil;
-        [KeychainUtils.shared storeUsername:self.username
-                                   password:authToken
-                                serviceName:WordPressComOAuthKeychainServiceName
-                                accessGroup:nil
-                             updateExisting:YES
-                                      error:&error];
+        [SFHFKeychainUtils storeUsername:self.username
+                             andPassword:authToken
+                          forServiceName:[WPAccount authKeychainServiceName]
+                             accessGroup:nil
+                          updateExisting:YES
+                                   error:&error];
 
         if (error) {
             DDLogError(@"Error while updating WordPressComOAuthKeychainServiceName token: %@", error);
@@ -96,10 +97,10 @@ static NSString * const WordPressComOAuthKeychainServiceName = @"public-api.word
 
     } else {
         NSError *error = nil;
-        [KeychainUtils.shared deleteItemWithUsername:self.username
-                                         serviceName:WordPressComOAuthKeychainServiceName
-                                         accessGroup:nil
-                                               error:&error];
+        [SFHFKeychainUtils deleteItemForUsername:self.username
+                                  andServiceName:[WPAccount authKeychainServiceName]
+                                     accessGroup:nil
+                                           error:&error];
         if (error) {
             DDLogError(@"Error while deleting WordPressComOAuthKeychainServiceName token: %@", error);
         }
@@ -133,15 +134,32 @@ static NSString * const WordPressComOAuthKeychainServiceName = @"public-api.word
 + (NSString *)tokenForUsername:(NSString *)username
 {
     NSError *error = nil;
-    NSString *authToken = [KeychainUtils.shared getPasswordForUsername:username
-                                                           serviceName:WordPressComOAuthKeychainServiceName
-                                                           accessGroup:nil
-                                                                 error:&error];
+    [WPAccount migrateAuthKeyForUsername:username];
+    NSString *authToken = [SFHFKeychainUtils getPasswordForUsername:username
+                                                     andServiceName:[WPAccount authKeychainServiceName]
+                                                        accessGroup:nil
+                                                              error:&error];
     if (error) {
         DDLogError(@"Error while retrieving WordPressComOAuthKeychainServiceName token: %@", error);
     }
 
     return authToken;
+}
+
++ (void)migrateAuthKeyForUsername:(NSString *)username
+{
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        if ([AppConfiguration isJetpack]) {
+            SharedDataIssueSolver *sharedDataIssueSolver = [SharedDataIssueSolver instance];
+            [sharedDataIssueSolver migrateAuthKeyFor:username];
+        }
+    });
+}
+
++ (NSString *)authKeychainServiceName
+{
+    return [AppConfiguration isWordPress] ? WordPressComOAuthKeychainServiceName : JetpackComOAuthKeychainServiceName;
 }
 
 #pragma mark - API Helpers

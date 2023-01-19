@@ -402,8 +402,7 @@ class GutenbergViewController: UIViewController, PostEditor, FeaturedImageDelega
 
         // Required to work around an issue present in iOS 14 beta 2
         // https://github.com/wordpress-mobile/WordPress-iOS/issues/14460
-        if #available(iOS 14.0, *),
-            presentedViewController?.view.accessibilityIdentifier == MoreSheetAlert.accessibilityIdentifier {
+        if presentedViewController?.view.accessibilityIdentifier == MoreSheetAlert.accessibilityIdentifier {
             dismiss(animated: true)
         }
     }
@@ -834,12 +833,14 @@ extension GutenbergViewController: GutenbergBridgeDelegate {
         }
         alertController.addAction(dismissAction)
 
-        if media.remoteStatus == .pushing || media.remoteStatus == .processing {
+        if media.remoteStatus == .failed || media.remoteStatus == .processing || media.remoteStatus == .local || media.remoteStatus == .pushing {
             let cancelUploadAction = UIAlertAction(title: MediaAttachmentActionSheet.stopUploadActionTitle, style: .destructive) { (action) in
                 self.mediaInserterHelper.cancelUploadOf(media: media)
             }
             alertController.addAction(cancelUploadAction)
-        } else if media.remoteStatus == .failed, let error = media.error {
+        }
+
+        if media.remoteStatus == .failed, let error = media.error {
             message = error.localizedDescription
             let retryUploadAction = UIAlertAction(title: MediaAttachmentActionSheet.retryUploadActionTitle, style: .default) { (action) in
                 self.mediaInserterHelper.retryUploadOf(media: media)
@@ -1181,7 +1182,7 @@ extension GutenbergViewController: GutenbergBridgeDataSource {
     func gutenbergMediaSources() -> [Gutenberg.MediaSource] {
         return [
             post.blog.supports(.stockPhotos) ? .stockPhotos : nil,
-            .tenor,
+            post.blog.supports(.tenor) ? .tenor : nil,
             .otherApps,
             .allFiles,
         ].compactMap { $0 }
@@ -1190,6 +1191,30 @@ extension GutenbergViewController: GutenbergBridgeDataSource {
     func gutenbergCapabilities() -> [Capabilities: Bool] {
         let isFreeWPCom = post.blog.isHostedAtWPcom && !post.blog.hasPaidPlan
         let isWPComSite = post.blog.isHostedAtWPcom || post.blog.isAtomic()
+
+        // Disable Jetpack-powered editor features in WordPress app based on Features Removal coordination
+        if !JetpackFeaturesRemovalCoordinator.jetpackFeaturesEnabled() {
+            return [
+                .mentions: false,
+                .xposts: false,
+                .contactInfoBlock: false,
+                .layoutGridBlock: false,
+                .tiledGalleryBlock: false,
+                .unsupportedBlockEditor: false,
+                .canEnableUnsupportedBlockEditor: false,
+                .isAudioBlockMediaUploadEnabled: false,
+                .mediaFilesCollectionBlock: false,
+                .reusableBlock: false,
+                .shouldUseFastImage: !post.blog.isPrivate(),
+                .facebookEmbed: false,
+                .instagramEmbed: false,
+                .loomEmbed: false,
+                .smartframeEmbed: false,
+                .supportSection: false,
+                .onlyCoreBlocks: true
+            ]
+        }
+
         return [
             .mentions: SuggestionService.shared.shouldShowSuggestions(for: post.blog),
             .xposts: SiteSuggestionService.shared.shouldShowSuggestions(for: post.blog),
@@ -1208,7 +1233,8 @@ extension GutenbergViewController: GutenbergBridgeDataSource {
             .facebookEmbed: post.blog.supports(.facebookEmbed),
             .instagramEmbed: post.blog.supports(.instagramEmbed),
             .loomEmbed: post.blog.supports(.loomEmbed),
-            .smartframeEmbed: post.blog.supports(.smartframeEmbed)
+            .smartframeEmbed: post.blog.supports(.smartframeEmbed),
+            .supportSection: true
         ]
     }
 

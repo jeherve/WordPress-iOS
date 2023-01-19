@@ -2,7 +2,7 @@
 #import "WPAccount.h"
 #import "AccountService.h"
 #import "NSURL+IDN.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "Constants.h"
 #import "WordPress-Swift.h"
 #import "WPUserAgent.h"
@@ -104,6 +104,11 @@ NSString * const OptionsKeyIsWPForTeams = @"is_wpforteams_site";
 - (void)prepareForDeletion
 {
     [super prepareForDeletion];
+
+    // delete stored password in the keychain for self-hosted sites.
+    if ([self.username length] > 0 && [self.xmlrpc length] > 0) {
+        self.password = nil;
+    }
 
     [_xmlrpcApi invalidateAndCancelTasks];
     [_wordPressOrgRestApi invalidateAndCancelTasks];
@@ -465,7 +470,7 @@ NSString * const OptionsKeyIsWPForTeams = @"is_wpforteams_site";
 
 - (NSString *)password
 {
-    return [KeychainUtils.shared getPasswordForUsername:self.username serviceName:self.xmlrpc accessGroup:nil error:nil];
+    return [SFHFKeychainUtils getPasswordForUsername:self.username andServiceName:self.xmlrpc accessGroup:nil error:nil];
 }
 
 - (void)setPassword:(NSString *)password
@@ -473,17 +478,17 @@ NSString * const OptionsKeyIsWPForTeams = @"is_wpforteams_site";
     NSAssert(self.username != nil, @"Can't set password if we don't know the username yet");
     NSAssert(self.xmlrpc != nil, @"Can't set password if we don't know the XML-RPC endpoint yet");
     if (password) {
-        [KeychainUtils.shared storeUsername:self.username
-                                   password:password
-                                serviceName:self.xmlrpc
-                                accessGroup:nil
-                             updateExisting:YES
-                                      error:nil];
+        [SFHFKeychainUtils storeUsername:self.username
+                             andPassword:password
+                          forServiceName:self.xmlrpc
+                             accessGroup:nil
+                          updateExisting:YES
+                                   error:nil];
     } else {
-        [KeychainUtils.shared deleteItemWithUsername:self.username
-                                         serviceName:self.xmlrpc
-                                         accessGroup:nil
-                                               error:nil];
+        [SFHFKeychainUtils deleteItemForUsername:self.username
+                                  andServiceName:self.xmlrpc
+                                     accessGroup:nil
+                                           error:nil];
     }
 }
 
@@ -530,8 +535,11 @@ NSString * const OptionsKeyIsWPForTeams = @"is_wpforteams_site";
         case BlogFeatureWPComRESTAPI:
         case BlogFeatureCommentLikes:
         case BlogFeatureStats:
-        case BlogFeatureStockPhotos:
             return [self supportsRestApi];
+        case BlogFeatureStockPhotos:
+            return [self supportsRestApi] && [JetpackFeaturesRemovalCoordinator jetpackFeaturesEnabled];
+        case BlogFeatureTenor:
+            return [JetpackFeaturesRemovalCoordinator jetpackFeaturesEnabled];
         case BlogFeatureSharing:
             return [self supportsSharing];
         case BlogFeatureOAuth2Login:
@@ -548,7 +556,7 @@ NSString * const OptionsKeyIsWPForTeams = @"is_wpforteams_site";
         case BlogFeatureJetpackImageSettings:
             return [self supportsJetpackImageSettings];
         case BlogFeatureJetpackSettings:
-            return [self supportsRestApi] && ![self isHostedAtWPcom] && [self isAdmin];
+            return [self supportsJetpackSettings];
         case BlogFeaturePushNotifications:
             return [self supportsPushNotifications];
         case BlogFeatureThemeBrowsing:
@@ -686,7 +694,8 @@ NSString * const OptionsKeyIsWPForTeams = @"is_wpforteams_site";
 - (BOOL)supportsStories
 {
     BOOL hasRequiredJetpack = [self hasRequiredJetpackVersion:@"9.1"];
-    return hasRequiredJetpack || self.isHostedAtWPcom;
+    // Stories are disabled in iPad until this Kanvas issue is solved: https://github.com/tumblr/kanvas-ios/issues/104
+    return (hasRequiredJetpack || self.isHostedAtWPcom) && ![UIDevice isPad] && [JetpackFeaturesRemovalCoordinator jetpackFeaturesEnabled];
 }
 
 - (BOOL)supportsContactInfo
@@ -707,6 +716,14 @@ NSString * const OptionsKeyIsWPForTeams = @"is_wpforteams_site";
 - (BOOL)supportsEmbedVariation:(NSString *)requiredJetpackVersion
 {
     return [self hasRequiredJetpackVersion:requiredJetpackVersion] || self.isHostedAtWPcom;
+}
+
+- (BOOL)supportsJetpackSettings
+{
+    return [JetpackFeaturesRemovalCoordinator jetpackFeaturesEnabled]
+    && [self supportsRestApi]
+    && ![self isHostedAtWPcom]
+    && [self isAdmin];
 }
 
 - (BOOL)accountIsDefaultAccount

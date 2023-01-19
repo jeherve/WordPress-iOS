@@ -412,9 +412,8 @@ private extension ZendeskUtils {
         }
 
         // 2. Use information from selected site.
-        let blogService = BlogService(managedObjectContext: context)
 
-        guard let blog = blogService.lastUsedBlog() else {
+        guard let blog = Blog.lastUsed(in: context) else {
             // We have no user information.
             completion()
             return
@@ -630,9 +629,7 @@ private extension ZendeskUtils {
     }
 
     static func getCurrentSiteDescription() -> String {
-        let blogService = BlogService(managedObjectContext: ContextManager.sharedInstance().mainContext)
-
-        guard let blog = blogService.lastUsedBlog() else {
+        guard let blog = Blog.lastUsed(in: ContextManager.sharedInstance().mainContext) else {
             return Constants.noValue
         }
 
@@ -641,10 +638,7 @@ private extension ZendeskUtils {
     }
 
     static func getBlogInformation() -> String {
-
-        let blogService = BlogService(managedObjectContext: ContextManager.sharedInstance().mainContext)
-
-        let allBlogs = blogService.blogsForAllAccounts()
+        let allBlogs = (try? BlogQuery().blogs(in: ContextManager.sharedInstance().mainContext)) ?? []
         guard allBlogs.count > 0 else {
             return Constants.noValue
         }
@@ -662,8 +656,7 @@ private extension ZendeskUtils {
     static func getTags() -> [String] {
 
         let context = ContextManager.sharedInstance().mainContext
-        let blogService = BlogService(managedObjectContext: context)
-        let allBlogs = blogService.blogsForAllAccounts()
+        let allBlogs = (try? BlogQuery().blogs(in: context)) ?? []
         var tags = [String]()
 
         // Add sourceTag
@@ -694,13 +687,13 @@ private extension ZendeskUtils {
 
 
         // Add gutenbergIsDefault tag
-        if let blog = blogService.lastUsedBlog() {
+        if let blog = Blog.lastUsed(in: context) {
             if blog.isGutenbergEnabled {
                 tags.append(Constants.gutenbergIsDefault)
             }
         }
 
-        if let currentSite = blogService.lastUsedOrFirstBlog(), !currentSite.isHostedAtWPcom, !currentSite.isAtomic() {
+        if let currentSite = Blog.lastUsedOrFirst(in: context), !currentSite.isHostedAtWPcom, !currentSite.isAtomic() {
             tags.append(Constants.mobileSelfHosted)
         }
 
@@ -982,8 +975,7 @@ private extension ZendeskUtils {
         } else {
             // fail safe: if the plan cache call fails for any reason, at least let's use the cached blogs
             // and compare the localized names
-            let blogService = BlogService(managedObjectContext: contextManager.mainContext)
-            let plans = Set(blogService.blogsForAllAccounts().compactMap { $0.planTitle })
+            let plans = Set(((try? BlogQuery().blogs(in: contextManager.mainContext)) ?? []).compactMap { $0.planTitle })
 
             for availablePlan in availablePlans {
                 if plans.contains(availablePlan.name) {
@@ -1045,9 +1037,7 @@ private extension ZendeskUtils {
 
     /// Provides the current site id to `getZendeskMetadata`, if it exists
     private static var currentSiteID: Int? {
-        guard let siteID = BlogService(managedObjectContext: ContextManager.shared.mainContext)
-                .lastUsedOrFirstBlog()?
-                .dotComID else {
+        guard let siteID = Blog.lastUsedOrFirst(in: ContextManager.shared.mainContext)?.dotComID else {
             return nil
         }
         return Int(truncating: siteID)

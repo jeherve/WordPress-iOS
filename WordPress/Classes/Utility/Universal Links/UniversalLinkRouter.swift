@@ -25,11 +25,16 @@ struct UniversalLinkRouter: LinkRouter {
     static let shared = UniversalLinkRouter(
         routes: defaultRoutes)
 
+    // A singleton that handles universal link routes without requiring authentication.
+    //
+    static let unauthenticated = UniversalLinkRouter(routes: jetpackRoutes)
+
     static let defaultRoutes: [Route] =
         redirects +
         meRoutes +
         newPostRoutes +
         newPageRoutes +
+        jetpackRoutes +
         notificationsRoutes +
         readerRoutes +
         statsRoutes +
@@ -41,6 +46,10 @@ struct UniversalLinkRouter: LinkRouter {
         MeRoute(),
         MeAccountSettingsRoute(),
         MeNotificationSettingsRoute()
+    ]
+
+    static let jetpackRoutes: [Route] = [
+        JetpackRoute()
     ]
 
     static let newPostRoutes: [Route] = [
@@ -120,8 +129,10 @@ struct UniversalLinkRouter: LinkRouter {
             return matcherCanHandle
         }
 
-        // If there's a hostname, check it's WordPress.com
-        return scheme == "https" && host == "wordpress.com" && matcherCanHandle
+        // If there's a hostname, check if it's WordPress.com or jetpack.com/app.
+        return scheme == "https"
+        && (host == "wordpress.com" || host == "jetpack.com")
+        && matcherCanHandle
     }
 
     /// Attempts to find a route that matches the url's path, and perform its
@@ -151,6 +162,11 @@ struct UniversalLinkRouter: LinkRouter {
         }
 
         for matchedRoute in matches {
+            if matchedRoute.jetpackPowered && !JetpackFeaturesRemovalCoordinator.jetpackFeaturesEnabled() {
+                let properties = ["calling_function": "deep_link", TracksPropertyKeys.url: url.absoluteString]
+                WPAnalytics.track(.jetpackFeatureIncorrectlyAccessed, properties: properties)
+                continue
+            }
             matchedRoute.action.perform(matchedRoute.values, source: presentingViewController, router: self)
         }
     }

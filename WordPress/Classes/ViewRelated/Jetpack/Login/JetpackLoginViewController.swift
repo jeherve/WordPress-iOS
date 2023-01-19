@@ -137,11 +137,11 @@ class JetpackLoginViewController: UIViewController {
         descriptionLabel.sizeToFit()
 
         installJetpackButton.setTitle(Constants.Buttons.jetpackInstallTitle, for: .normal)
-        installJetpackButton.isHidden = hasJetpack
+        installJetpackButton.isHidden = blog.hasJetpack
         installJetpackButton.contentEdgeInsets = UIEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
 
         signinButton.setTitle(Constants.Buttons.loginTitle, for: .normal)
-        signinButton.isHidden = !hasJetpack
+        signinButton.isHidden = !blog.hasJetpack
 
         let paragraph = NSMutableParagraphStyle(minLineHeight: WPStyleGuide.fontSizeForTextStyle(.footnote),
                                                 lineBreakMode: .byWordWrapping,

@@ -1,1 +1,7 @@
-Esta actualización es breve y concisa: hemos hecho que Jetpack Social sea más visible en la sección Compartir de los ajustes de tu sitio, así como en los ajustes de las entradas. Vamos a socializar.
+Hemos estado trabajando duro en correcciones y actualizaciones muy técnicas, tras el telón, para hacer que la app WordPress funcione como la seda.
+
+- Posticulando características
+- Refabricando interfaces
+- Reticulando estrías
+- Programando similitudes
+- Reconstruyendo el gigaverso

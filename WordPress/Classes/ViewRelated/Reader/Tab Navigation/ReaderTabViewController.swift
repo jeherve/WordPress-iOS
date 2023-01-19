@@ -57,7 +57,7 @@ class ReaderTabViewController: UIViewController {
         ReaderTracker.shared.start(.main)
 
         if AppConfiguration.showsWhatIsNew {
-            WPTabBarController.sharedInstance()?.presentWhatIsNew(on: self)
+            RootViewCoordinator.shared.presentWhatIsNew(on: self)
         }
     }
 
@@ -162,7 +162,7 @@ extension ReaderTabViewController: UIViewControllerRestoration {
 
         let index = Int(coder.decodeInt32(forKey: ReaderTabViewController.encodedIndexKey))
 
-        let controller = WPTabBarController.sharedInstance().readerTabViewController
+        let controller = RootViewCoordinator.sharedPresenter.readerTabViewController
         controller?.setStartIndex(index)
 
         return controller
@@ -196,5 +196,16 @@ extension ReaderTabViewController {
         static let encodedIndexKey = "WPReaderTabControllerIndexRestorationKey"
         static let discoverIndex = 1
         static let spotlightOffset = UIOffset(horizontal: 20, vertical: -10)
+    }
+}
+
+// MARK: - WPScrollableViewController conformance
+extension ReaderTabViewController: WPScrollableViewController {
+    /// Scrolls the first child VC to the top if it's a `ReaderStreamViewController`.
+    func scrollViewToTop() {
+        guard let readerStreamVC = children.first as? ReaderStreamViewController else {
+            return
+        }
+        readerStreamVC.scrollViewToTop()
     }
 }

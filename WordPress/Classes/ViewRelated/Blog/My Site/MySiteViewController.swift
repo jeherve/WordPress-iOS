@@ -163,6 +163,7 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
         subscribeToPostPublished()
         startObservingQuickStart()
         startObservingOnboardingPrompt()
+        subscribeToWillEnterForeground()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -185,10 +186,12 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
 
+        displayOverlayIfNeeded()
+
         workaroundLargeTitleCollapseBug()
 
         if AppConfiguration.showsWhatIsNew {
-            WPTabBarController.sharedInstance()?.presentWhatIsNew(on: self)
+            RootViewCoordinator.shared.presentWhatIsNew(on: self)
         }
 
         FancyAlertViewController.presentCustomAppIconUpgradeAlertIfNecessary(from: self)
@@ -263,6 +266,13 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
         NotificationCenter.default.addObserver(self, selector: #selector(handlePostPublished), name: .newPostPublished, object: nil)
     }
 
+    private func subscribeToWillEnterForeground() {
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(displayOverlayIfNeeded),
+                                               name: UIApplication.willEnterForegroundNotification,
+                                               object: nil)
+    }
+
     func updateNavigationTitle(for blog: Blog) {
         let blogName = blog.settings?.name
         let title = blogName != nil && blogName?.isEmpty == false
@@ -274,7 +284,7 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
     private func updateSegmentedControl(for blog: Blog, switchTabsIfNeeded: Bool = false) {
         // The segmented control should be hidden if the blog is not a WP.com/Atomic/Jetpack site, or if the device doesn't have a horizontally compact view
         let hideSegmentedControl =
-            !FeatureFlag.mySiteDashboard.enabled ||
+            !JetpackFeaturesRemovalCoordinator.jetpackFeaturesEnabled() ||
             !blog.isAccessibleThroughWPCom() ||
             !splitViewControllerIsHorizontallyCompact
 
@@ -348,7 +358,7 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
     }
 
     private func setupNavigationItem() {
-        navigationItem.largeTitleDisplayMode = FeatureFlag.mySiteDashboard.enabled ? .never : .always
+        navigationItem.largeTitleDisplayMode = .never
         navigationItem.title = Strings.mySite
         navigationItem.backButtonTitle = Strings.mySite
 
@@ -373,11 +383,10 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
     }
 
     private func setupNavBarAppearance() {
-        navigationController?.navigationBar.scrollEdgeAppearance?.configureWithTransparentBackground()
-        if FeatureFlag.mySiteDashboard.enabled {
-            let transparentTitleAttributes = [NSAttributedString.Key.foregroundColor: UIColor.clear]
-            navigationController?.navigationBar.scrollEdgeAppearance?.titleTextAttributes = transparentTitleAttributes
-        }
+        let scrollEdgeAppearance = navigationController?.navigationBar.scrollEdgeAppearance
+        let transparentTitleAttributes = [NSAttributedString.Key.foregroundColor: UIColor.clear]
+        scrollEdgeAppearance?.titleTextAttributes = transparentTitleAttributes
+        scrollEdgeAppearance?.configureWithTransparentBackground()
     }
 
     private func resetNavBarAppearance() {
@@ -397,7 +406,7 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
     /// - Returns:the main blog for an account (last selected, or first blog in list).
     ///
     private func mainBlog() -> Blog? {
-        return blogService.lastUsedOrFirstBlog()
+        return Blog.lastUsedOrFirst(in: ContextManager.sharedInstance().mainContext)
     }
 
     /// This VC is prepared to either show the details for a blog, or show a no-results VC configured to let the user know they have no blogs.
@@ -548,6 +557,7 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
         }
 
         hideBlogDetails()
+        hideSplitDetailsView()
         blogDetailsViewController = nil
 
         guard noResultsViewController.view.superview == nil else {
@@ -643,7 +653,7 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
                                     trailingAnchor: view.safeAreaLayoutGuide.trailingAnchor,
                                     bottomAnchor: view.safeAreaLayoutGuide.bottomAnchor)
 
-        if let blog = blog, tabBarController is WPTabBarController,
+        if let blog = blog,
            noResultsViewController.view.superview == nil {
             createButtonCoordinator?.showCreateButton(for: blog)
         }
@@ -697,12 +707,19 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
     }
 
     func launchSiteCreation(source: String) {
-        let wizardLauncher = SiteCreationWizardLauncher()
-        guard let wizard = wizardLauncher.ui else {
-            return
-        }
-        present(wizard, animated: true)
-        WPAnalytics.track(.enhancedSiteCreationAccessed, withProperties: ["source": source])
+        JetpackFeaturesRemovalCoordinator.presentSiteCreationOverlayIfNeeded(in: self, source: source, onWillDismiss: {
+            guard JetpackFeaturesRemovalCoordinator.siteCreationPhase() != .two else {
+                return
+            }
+
+            // Display site creation flow if not in phase two
+            let wizardLauncher = SiteCreationWizardLauncher()
+            guard let wizard = wizardLauncher.ui else {
+                return
+            }
+            self.present(wizard, animated: true)
+            WPAnalytics.track(.enhancedSiteCreationAccessed, withProperties: ["source": source])
+        })
     }
 
     @objc
@@ -845,6 +862,7 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
         blogDashboardViewController.update(blog: blog)
         embedChildInStackView(blogDashboardViewController)
         self.blogDashboardViewController = blogDashboardViewController
+        stackView.sendSubviewToBack(blogDashboardViewController.view)
     }
 
     // MARK: - Model Changes
@@ -912,7 +930,7 @@ class MySiteViewController: UIViewController, NoResultsViewHost {
             return
         }
 
-        guard let blog = blogService.lastUsedOrFirstBlog() else {
+        guard let blog = Blog.lastUsedOrFirst(in: ContextManager.sharedInstance().mainContext) else {
             return
         }
 
@@ -960,6 +978,16 @@ extension MySiteViewController: WPSplitViewControllerDetailProvider {
 
         return blogDetailsViewController.initialDetailViewControllerForSplitView(splitView)
     }
+
+    /// Removes all view controllers from the details view controller stack and leaves split view details in an empty state.
+    ///
+    private func hideSplitDetailsView() {
+        if let splitViewController = splitViewController as? WPSplitViewController,
+           splitViewController.viewControllers.count > 1,
+           let detailsNavigationController = splitViewController.viewControllers.last as? UINavigationController {
+            detailsNavigationController.setViewControllers([], animated: false)
+        }
+    }
 }
 
 // MARK: - UIViewControllerTransitioningDelegate
@@ -1003,6 +1031,19 @@ extension MySiteViewController: BlogDetailsPresentationDelegate {
             blogDetailsViewController?.showDetailViewController(viewController, sender: blogDetailsViewController)
         case .none:
             return
+        }
+    }
+}
+
+// MARK: Jetpack Features Removal
+
+private extension MySiteViewController {
+    @objc func displayOverlayIfNeeded() {
+        if isViewOnScreen() {
+            let didReloadUI = RootViewCoordinator.shared.reloadUIIfNeeded(blog: self.blog)
+            if !didReloadUI {
+                JetpackFeaturesRemovalCoordinator.presentOverlayIfNeeded(in: self, source: .appOpen, blog: self.blog)
+            }
         }
     }
 }

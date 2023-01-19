@@ -69,7 +69,7 @@ class BlogDashboardCardFrameView: UIView {
         button.accessibilityTraits = .button
         button.isHidden = true
         button.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-        button.on(.touchUpInside) { [weak self] _ in
+        button.on([.touchUpInside, .menuActionTriggered]) { [weak self] _ in
             self?.onEllipsisButtonTap?()
         }
         return button
@@ -208,6 +208,10 @@ class BlogDashboardCardFrameView: UIView {
             chevronImageView,
             ellipsisButton
         ])
+    }
+
+    func removeButtonContainerStackView() {
+        buttonContainerStackView.removeFromSuperview()
     }
 
     private func updateColors() {

@@ -1,7 +1,7 @@
 #import "ReaderSiteService.h"
 
 #import "AccountService.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "ReaderPostService.h"
 #import "ReaderPost.h"
 #import "WPAccount.h"
@@ -167,9 +167,10 @@ NSString * const ReaderSiteServiceErrorDomain = @"ReaderSiteServiceErrorDomain";
         return;
     }
 
-    NSManagedObjectContext *context = [[ContextManager sharedInstance] newDerivedContext];
-    ReaderPostService *postService = [[ReaderPostService alloc] initWithManagedObjectContext:context];
-    [postService fetchPostsForTopic:followedSites earlierThan:[NSDate date] success:nil failure:nil];
+    [[ContextManager sharedInstance] performAndSaveUsingBlock:^(NSManagedObjectContext *context) {
+        ReaderPostService *postService = [[ReaderPostService alloc] initWithManagedObjectContext:context];
+        [postService fetchPostsForTopic:followedSites earlierThan:[NSDate date] success:nil failure:nil];
+    }];
 }
 
 - (void)flagSiteWithID:(NSNumber *)siteID asBlocked:(BOOL)blocked success:(void(^)(void))success failure:(void(^)(NSError *error))failure

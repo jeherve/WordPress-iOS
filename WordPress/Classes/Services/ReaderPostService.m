@@ -1,7 +1,7 @@
 #import "ReaderPostService.h"
 
 #import "AccountService.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "ReaderGapMarker.h"
 #import "ReaderPost.h"
 #import "ReaderSiteService.h"
@@ -194,10 +194,8 @@ static NSString * const ReaderPostGlobalIDKey = @"globalID";
 
 - (void)refreshPostsForFollowedTopic
 {
-    // Do all of this work on a background thread.
-    NSManagedObjectContext *context = [[ContextManager sharedInstance] newDerivedContext];
-    ReaderTopicService *topicService = [[ReaderTopicService alloc] initWithManagedObjectContext:context];
-    [context performBlock:^{
+    [[ContextManager sharedInstance] performAndSaveUsingBlock:^(NSManagedObjectContext *context) {
+        ReaderTopicService *topicService = [[ReaderTopicService alloc] initWithManagedObjectContext:context];
         ReaderAbstractTopic *topic = [topicService topicForFollowedSites];
         if (topic) {
             ReaderPostService *service = [[ReaderPostService alloc] initWithManagedObjectContext:context];

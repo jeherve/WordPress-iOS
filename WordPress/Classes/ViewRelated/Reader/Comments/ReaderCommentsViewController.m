@@ -1,7 +1,7 @@
 #import "ReaderCommentsViewController.h"
 
 #import "CommentService.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "ReaderPost.h"
 #import "ReaderPostService.h"
 #import "UIView+Subviews.h"
@@ -1000,12 +1000,16 @@ static NSString *CommentContentCellIdentifier = @"CommentContentTableViewCell";
 - (void)syncHelper:(WPContentSyncHelper *)syncHelper syncContentWithUserInteraction:(BOOL)userInteraction success:(void (^)(BOOL))success failure:(void (^)(NSError *))failure
 {
     self.failedToFetchComments = NO;
-    CommentService *service = [[CommentService alloc] initWithManagedObjectContext:[[ContextManager sharedInstance] newDerivedContext]];
-    [service syncHierarchicalCommentsForPost:self.post page:1 success:^(BOOL hasMore, NSNumber *totalComments) {
-        if (success) {
-            success(hasMore);
-        }
-    } failure:failure];
+
+    [[ContextManager sharedInstance] performAndSaveUsingBlock:^(NSManagedObjectContext *context) {
+        CommentService *service = [[CommentService alloc] initWithManagedObjectContext:context];
+        [service syncHierarchicalCommentsForPost:self.post page:1 success:^(BOOL hasMore, NSNumber *totalComments) {
+            if (success) {
+                success(hasMore);
+            }
+        } failure:failure];
+    }];
+
     [self refreshNoResultsView];
 }
 
@@ -1014,13 +1018,15 @@ static NSString *CommentContentCellIdentifier = @"CommentContentTableViewCell";
     self.failedToFetchComments = NO;
     [self.activityFooter startAnimating];
 
-    CommentService *service = [[CommentService alloc] initWithManagedObjectContext:[[ContextManager sharedInstance] newDerivedContext]];
-    NSInteger page = [service numberOfHierarchicalPagesSyncedforPost:self.post] + 1;
-    [service syncHierarchicalCommentsForPost:self.post page:page success:^(BOOL hasMore, NSNumber *totalComments) {
-        if (success) {
-            success(hasMore);
-        }
-    } failure:failure];
+    [[ContextManager sharedInstance] performAndSaveUsingBlock:^(NSManagedObjectContext *context) {
+        CommentService *service = [[CommentService alloc] initWithManagedObjectContext:context];
+        NSInteger page = [service numberOfHierarchicalPagesSyncedforPost:self.post] + 1;
+        [service syncHierarchicalCommentsForPost:self.post page:page success:^(BOOL hasMore, NSNumber *totalComments) {
+            if (success) {
+                success(hasMore);
+            }
+        } failure:failure];
+    }];
 }
 
 - (void)syncContentEnded:(WPContentSyncHelper *)syncHelper

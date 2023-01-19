@@ -11,6 +11,10 @@ class BloggingRemindersFlow {
                         delegate: BloggingRemindersFlowDelegate? = nil,
                         onDismiss: DismissClosure? = nil) {
 
+        guard Feature.enabled(.bloggingReminders) && JetpackNotificationMigrationService.shared.shouldPresentNotifications() else {
+            return
+        }
+
         guard alwaysShow || !hasShownWeeklyRemindersFlow(for: blog) else {
             return
         }
@@ -64,7 +68,7 @@ class BloggingRemindersFlow {
         UserPersistentStoreFactory.instance().bool(forKey: weeklyRemindersKey(for: blog))
     }
 
-    private static func setHasShownWeeklyRemindersFlow(for blog: Blog) {
+    static func setHasShownWeeklyRemindersFlow(for blog: Blog) {
         UserPersistentStoreFactory.instance().set(true, forKey: weeklyRemindersKey(for: blog))
     }
 

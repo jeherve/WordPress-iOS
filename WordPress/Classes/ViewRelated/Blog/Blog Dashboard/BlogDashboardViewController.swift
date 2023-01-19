@@ -73,7 +73,12 @@ final class BlogDashboardViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
 
-        viewModel.loadCards()
+        viewModel.loadCards { cards in
+            guard cards.hasPrompts else {
+                return
+            }
+            WPAnalytics.track(.promptsDashboardCardViewed)
+        }
         QuickStartTourGuide.shared.currentEntryPoint = .blogDashboard
         startAlertTimer()
 
@@ -122,7 +127,7 @@ final class BlogDashboardViewController: UIViewController {
     }
 
     func pulledToRefresh(completion: (() -> Void)? = nil) {
-        viewModel.loadCards {
+        viewModel.loadCards { _ in
             completion?()
         }
     }
@@ -134,6 +139,7 @@ final class BlogDashboardViewController: UIViewController {
     private func setupCollectionView() {
         collectionView.isScrollEnabled = !embeddedInScrollView
         collectionView.backgroundColor = .listBackground
+        collectionView.register(DashboardMigrationSuccessCell.self, forCellWithReuseIdentifier: DashboardMigrationSuccessCell.self.defaultReuseID)
         collectionView.register(DashboardQuickActionsCardCell.self, forCellWithReuseIdentifier: DashboardQuickActionsCardCell.self.defaultReuseID)
         DashboardCard.allCases.forEach {
             collectionView.register($0.cell, forCellWithReuseIdentifier: $0.cell.defaultReuseID)
@@ -224,8 +230,9 @@ extension BlogDashboardViewController {
 
         let section = NSCollectionLayoutSection(group: group)
         let isQuickActionSection = viewModel.isQuickActionsSection(sectionIndex)
+        let isMigrationSuccessCardSection = viewModel.isMigrationSuccessCardSection(sectionIndex)
         let horizontalInset = isQuickActionSection ? 0 : Constants.horizontalSectionInset
-        let bottomInset = isQuickActionSection ? 0 : Constants.verticalSectionInset
+        let bottomInset = isQuickActionSection || isMigrationSuccessCardSection ? 0 : Constants.verticalSectionInset
         section.contentInsets = NSDirectionalEdgeInsets(top: Constants.verticalSectionInset,
                                                         leading: horizontalInset,
                                                         bottom: bottomInset,
@@ -323,5 +330,13 @@ extension BlogDashboardViewController: UIPopoverPresentationControllerDelegate {
     // Force popover views to be presented as a popover (instead of being presented as a form sheet on iPhones).
     public func adaptivePresentationStyle(for controller: UIPresentationController, traitCollection: UITraitCollection) -> UIModalPresentationStyle {
         return .none
+    }
+}
+
+// MARK: - Helper functions
+
+private extension Collection where Element == DashboardCardModel {
+    var hasPrompts: Bool {
+        contains(where: { $0.cardType == .prompts })
     }
 }

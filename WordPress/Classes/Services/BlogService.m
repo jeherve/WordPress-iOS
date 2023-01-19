@@ -2,14 +2,13 @@
 #import "Blog.h"
 #import "WPAccount.h"
 #import "AccountService.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "WPError.h"
 #import "Media.h"
 #import "PostCategoryService.h"
 #import "CommentService.h"
 #import "PostService.h"
 #import "TodayExtensionService.h"
-#import "ContextManager.h"
 #import "WordPress-Swift.h"
 #import "PostType.h"
 @import WordPressKit;
@@ -29,91 +28,6 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
 {
     NSManagedObjectContext *context = [[ContextManager sharedInstance] mainContext];
     return [[BlogService alloc] initWithManagedObjectContext:context];
-}
-
-- (Blog *)blogByBlogId:(NSNumber *)blogID andUsername:(NSString *)username
-{
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"blogID = %@ AND account.username = %@", blogID, username];
-    return [self blogWithPredicate:predicate];
-}
-
-- (Blog *)blogByHostname:(NSString *)hostname
-{
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"url CONTAINS %@", hostname];
-    NSArray <Blog *>* blogs = [self blogsWithPredicate:predicate];
-    return [blogs firstObject];
-}
-
-- (Blog *)lastUsedOrFirstBlog
-{
-    Blog *blog = [self lastUsedOrPrimaryBlog];
-
-    if (!blog) {
-        blog = [self firstBlog];
-    }
-
-    return blog;
-}
-
-- (Blog *)lastUsedOrFirstBlogThatSupports:(BlogFeature)feature
-{
-    Blog *blog = [self lastUsedOrPrimaryBlog];
-
-    if (![blog supports:feature]) {
-        blog = [self firstBlogThatSupports:feature];
-    }
-
-    return blog;
-}
-
-- (Blog *)lastUsedOrPrimaryBlog
-{
-    Blog *blog = [self lastUsedBlog];
-
-    if (!blog) {
-        blog = [self primaryBlog];
-    }
-
-    return blog;
-}
-
-- (Blog *)lastUsedBlog
-{
-    // Try to get the last used blog, if there is one.
-    RecentSitesService *recentSitesService = [RecentSitesService new];
-    NSString *url = [[recentSitesService recentSites] firstObject];
-    if (!url) {
-        return nil;
-    }
-
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"visible = YES AND url = %@", url];
-    Blog *blog = [self blogWithPredicate:predicate];
-
-    return blog;
-}
-
-- (Blog *)primaryBlog
-{
-    return [[WPAccount lookupDefaultWordPressComAccountInContext:self.managedObjectContext] defaultBlog];
-}
-
-- (Blog *)firstBlogThatSupports:(BlogFeature)feature
-{
-    NSPredicate *predicate = [self predicateForVisibleBlogs];
-    NSArray *results = [self blogsWithPredicate:predicate];
-
-    for (Blog *blog in results) {
-        if ([blog supports:feature]) {
-            return blog;
-        }
-    }
-    return nil;
-}
-
-- (Blog *)firstBlog
-{
-    NSPredicate *predicate = [self predicateForVisibleBlogs];
-    return [self blogWithPredicate:predicate];
 }
 
 - (void)syncBlogsForAccount:(WPAccount *)account
@@ -266,7 +180,7 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
         [self updateMultiAuthor:users forBlog:blogObjectID];
         dispatch_group_leave(syncGroup);
     } failure:^(NSError *error) {
-        DDLogError(@"Failed checking muti-author status for blog %@: %@", blog.url, error);
+        DDLogError(@"Failed checking multi-author status for blog %@: %@", blog.url, error);
         dispatch_group_leave(syncGroup);
     }];
 
@@ -359,7 +273,7 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
         [self updateMultiAuthor:users forBlog:blogObjectID];
         success();
     } failure:^(NSError *error) {
-        DDLogError(@"Failed checking muti-author status for blog %@: %@", blog.url, error);
+        DDLogError(@"Failed checking multi-author status for blog %@: %@", blog.url, error);
         failure(error);
     }];
 }
@@ -456,11 +370,6 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
                                failure:failure];
 }
 
-- (BOOL)hasVisibleWPComAccounts
-{
-    return [self blogCountVisibleForWPComAccounts] > 0;
-}
-
 - (BOOL)hasAnyJetpackBlogs
 {
     NSPredicate *jetpackManagedPredicate = [NSPredicate predicateWithFormat:@"account != NULL AND isHostedAtWPcom = NO"];
@@ -477,65 +386,10 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
     return [jetpackUnmanagedBlogs count] > 0;
 }
 
-- (NSInteger)blogCountForAllAccounts
-{
-    return [self blogCountWithPredicate:nil];
-}
-
-- (NSInteger)blogCountSelfHosted
-{
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"account = NULL"];
-    return [self blogCountWithPredicate:predicate];
-}
-
-- (NSInteger)blogCountForWPComAccounts
-{
-    return [self blogCountWithPredicate:[NSPredicate predicateWithFormat:@"account != NULL"]];
-}
-
-- (NSInteger)blogCountVisibleForWPComAccounts
-{
-    NSPredicate *predicate = [self predicateForVisibleBlogsWPComAccounts];
-    return [self blogCountWithPredicate:predicate];
-}
-
-- (NSInteger)blogCountVisibleForAllAccounts
-{
-    NSPredicate *predicate = [self predicateForVisibleBlogs];
-    return [self blogCountWithPredicate:predicate];
-}
-
 - (NSArray *)blogsWithNoAccount
 {
-    NSPredicate *predicate = [self predicateForNoAccount];
-    return [self blogsWithPredicate:predicate];
+    return [Blog selfHostedInContext:self.managedObjectContext];
 }
-
-- (NSArray<Blog *> *)blogsForAllAccounts
-{
-    return [self blogsWithPredicate:nil];
-}
-
-- (NSArray<Blog *> *)visibleBlogsForWPComAccounts
-{
-    NSPredicate *predicate = [self predicateForVisibleBlogsWPComAccounts];
-    return [self blogsWithPredicate:predicate];
-}
-
-- (NSDictionary *)blogsForAllAccountsById
-{
-    NSMutableDictionary *blogMap = [NSMutableDictionary dictionary];
-    NSArray *allBlogs = [self blogsWithPredicate:nil];
-    
-    for (Blog *blog in allBlogs) {
-        if (blog.dotComID != nil) {
-            blogMap[blog.dotComID] = blog;
-        }
-    }
-    
-    return blogMap;
-}
-
 
 ///--------------------
 /// @name Blog creation
@@ -578,38 +432,6 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
     return nil;
 }
 
-- (Blog *)findBlogWithXmlrpc:(NSString *)xmlrpc
-                 andUsername:(NSString *)username
-{
-    NSArray *foundBlogs = [self blogsWithPredicate:[NSPredicate predicateWithFormat:@"xmlrpc = %@ AND username = %@", xmlrpc, username]];
-    return [foundBlogs firstObject];
-}
-
-- (Blog *)createBlogWithAccount:(WPAccount *)account
-{
-    Blog *blog = [self createBlog];
-    blog.account = account;
-    return blog;
-}
-
-- (Blog *)createBlog
-{
-    NSString *entityName = NSStringFromClass([Blog class]);
-    Blog *blog = [NSEntityDescription insertNewObjectForEntityForName:entityName
-                                               inManagedObjectContext:self.managedObjectContext];
-    blog.settings = [self createSettingsWithBlog:blog];
-    return blog;
-}
-
-- (BlogSettings *)createSettingsWithBlog:(Blog *)blog
-{
-    NSString *entityName = [BlogSettings classNameWithoutNamespaces];
-    BlogSettings *settings = [NSEntityDescription insertNewObjectForEntityForName:entityName
-                                                           inManagedObjectContext:self.managedObjectContext];
-    settings.blog = blog;
-    return settings;
-}
-
 - (void)removeBlog:(Blog *)blog
 {
     DDLogInfo(@"<Blog:%@> remove", blog.hostURL);
@@ -626,7 +448,7 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
         [accountService purgeAccountIfUnused:account];
     }
 
-    [[ContextManager sharedInstance] saveContext:self.managedObjectContext];
+    [[ContextManager sharedInstance] saveContextAndWait:self.managedObjectContext];
     [WPAnalytics refreshMetadata];
 }
 
@@ -724,7 +546,11 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
 
     if (!blog) {
         DDLogInfo(@"New blog from account %@: %@", account.username, remoteBlog);
-        blog = [self createBlogWithAccount:account];
+        if (account != nil) {
+            blog = [Blog createBlankBlogWithAccount:account];
+        } else {
+            blog = [Blog createBlankBlogInContext:self.managedObjectContext];
+        }
         blog.xmlrpc = remoteBlog.xmlrpc;
     }
 
@@ -733,9 +559,7 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
 
 - (void)updateBlog:(Blog *)blog withRemoteBlog:(RemoteBlog *)remoteBlog
 {
-    if (!blog.settings) {
-        blog.settings = [self createSettingsWithBlog:blog];
-    }
+    [blog addSettingsIfNecessary];
 
     blog.url = remoteBlog.url;
     blog.dotComID = remoteBlog.blogID;
@@ -824,11 +648,6 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
     return [[AccountServiceRemoteREST alloc] initWithWordPressComRestApi:account.wordPressComRestApi];
 }
 
-- (Blog *)blogWithPredicate:(NSPredicate *)predicate
-{
-    return [[self blogsWithPredicate:predicate] firstObject];
-}
-
 - (NSArray *)blogsWithPredicate:(NSPredicate *)predicate
 {
     NSFetchRequest *request = [self fetchRequestWithPredicate:predicate];
@@ -868,58 +687,14 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
     return request;
 }
 
-- (NSPredicate *)predicateForVisibleBlogs
-{
-    return [NSPredicate predicateWithFormat:@"visible = YES"];
-}
-
-
-- (NSPredicate *)predicateForVisibleBlogsWPComAccounts
-{
-    NSArray *subpredicates = @[
-                            [self predicateForVisibleBlogs],
-                            [NSPredicate predicateWithFormat:@"account != NULL"],
-                            ];
-    NSPredicate *predicate = [NSCompoundPredicate andPredicateWithSubpredicates:subpredicates];
-
-    return predicate;
-}
-
-- (NSPredicate *)predicateForNoAccount
-{
-    return [NSPredicate predicateWithFormat:@"account = NULL"];
-}
-
-- (NSUInteger)countForSyncedPostsWithEntityName:(NSString *)entityName
-                                        forBlog:(Blog *)blog
-{
-    __block NSUInteger count = 0;
-    NSFetchRequest *request = [NSFetchRequest fetchRequestWithEntityName:entityName];
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"(remoteStatusNumber == %@) AND (postID != NULL) AND (original == NULL) AND (blog == %@)",
-                              [NSNumber numberWithInt:AbstractPostRemoteStatusSync],
-                              blog];
-    [request setPredicate:predicate];
-    NSSortDescriptor *sortDescriptor = [[NSSortDescriptor alloc] initWithKey:@"date_created_gmt"
-                                                                   ascending:YES];
-    [request setSortDescriptors:@[sortDescriptor]];
-    request.includesSubentities = NO;
-    request.resultType = NSCountResultType;
-
-    [self.managedObjectContext performBlockAndWait:^{
-        NSError *error = nil;
-        count = [self.managedObjectContext countForFetchRequest:request
-                                                          error:&error];
-    }];
-    return count;
-}
-
 #pragma mark - Completion handlers
 
 - (void)updateMultiAuthor:(NSArray<RemoteUser *> *)users forBlog:(NSManagedObjectID *)blogObjectID
 {
-    [self.managedObjectContext performBlock:^{
+    NSManagedObjectContext *context = self.managedObjectContext;
+    [context performBlock:^{
         NSError *error;
-        Blog *blog = (Blog *)[self.managedObjectContext existingObjectWithID:blogObjectID error:&error];
+        Blog *blog = (Blog *)[context existingObjectWithID:blogObjectID error:&error];
         if (error) {
             DDLogError(@"%@", error);
         }
@@ -927,7 +702,7 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
             return;
         }
         
-        [self updateBlogAuthorsFor:blog with:users];
+        [self updateBlogAuthorsForBlog:blog withRemoteUsers:users];
         
         blog.isMultiAuthor = users.count > 1;
         /// Search for a matching user ID
@@ -953,7 +728,7 @@ NSString *const WPBlogUpdatedNotification = @"WPBlogUpdatedNotification";
                 }
             }
         }
-        [[ContextManager sharedInstance] saveContext:self.managedObjectContext];
+        [[ContextManager sharedInstance] saveContext:context];
     }];
 }
 

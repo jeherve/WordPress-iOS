@@ -384,6 +384,7 @@ import Foundation
     // Blogging Prompts
     case promptsBottomSheetAnswerPrompt
     case promptsBottomSheetHelp
+    case promptsBottomSheetViewed
     case promptsIntroductionModalViewed
     case promptsIntroductionModalDismissed
     case promptsIntroductionModalTryItNow
@@ -395,6 +396,7 @@ import Foundation
     case promptsDashboardCardMenuSkip
     case promptsDashboardCardMenuRemove
     case promptsDashboardCardMenuLearnMore
+    case promptsDashboardCardViewed
     case promptsListViewed
     case promptsReminderSettingsIncludeSwitch
     case promptsReminderSettingsHelp
@@ -407,6 +409,20 @@ import Foundation
     case jetpackPoweredBadgeTapped
     case jetpackPoweredBannerTapped
     case jetpackPoweredBottomSheetButtonTapped
+    case jetpackFullscreenOverlayDisplayed
+    case jetpackFullscreenOverlayLinkTapped
+    case jetpackFullscreenOverlayButtonTapped
+    case jetpackFullscreenOverlayDismissed
+    case jetpackSiteCreationOverlayDisplayed
+    case jetpackSiteCreationOverlayButtonTapped
+    case jetpackSiteCreationOverlayDismissed
+    case jetpackBrandingMenuCardDisplayed
+    case jetpackBrandingMenuCardTapped
+    case jetpackBrandingMenuCardLinkTapped
+    case jetpackBrandingMenuCardHidden
+    case jetpackBrandingMenuCardRemindLater
+    case jetpackBrandingMenuCardContextualMenuAccessed
+    case jetpackFeatureIncorrectlyAccessed
 
     // Jetpack plugin install prompt
     case jetpackInstallPromptShown
@@ -1064,6 +1080,8 @@ import Foundation
             return "my_site_create_sheet_answer_prompt_tapped"
         case .promptsBottomSheetHelp:
             return "my_site_create_sheet_prompt_help_tapped"
+        case .promptsBottomSheetViewed:
+            return "blogging_prompts_create_sheet_card_viewed"
         case .promptsIntroductionModalViewed:
             return "blogging_prompts_introduction_modal_viewed"
         case .promptsIntroductionModalDismissed:
@@ -1086,6 +1104,8 @@ import Foundation
             return "blogging_prompts_my_site_card_menu_remove_from_dashboard_tapped"
         case .promptsDashboardCardMenuLearnMore:
             return "blogging_prompts_my_site_card_menu_learn_more_tapped"
+        case .promptsDashboardCardViewed:
+            return "blogging_prompts_my_site_card_viewed"
         case .promptsListViewed:
             return "blogging_prompts_prompts_list_viewed"
         case .promptsReminderSettingsIncludeSwitch:
@@ -1108,7 +1128,6 @@ import Foundation
             return "jetpack_powered_banner_tapped"
         case .jetpackPoweredBottomSheetButtonTapped:
             return "jetpack_powered_bottom_sheet_button_tapped"
-
         // Jetpack plugin install prompt
         case .jetpackInstallPromptShown:
             return "jetpack_install_prompt_shown"
@@ -1118,6 +1137,34 @@ import Foundation
             return "jetpack_install_prompt_install_tapped"
         case .jetpackInstallPromptDismissTapped:
             return "jetpack_install_prompt_dismiss_tapped"
+        case .jetpackFullscreenOverlayDisplayed:
+            return "remove_feature_overlay_displayed"
+        case .jetpackFullscreenOverlayLinkTapped:
+            return "remove_feature_overlay_link_tapped"
+        case .jetpackFullscreenOverlayButtonTapped:
+            return "remove_feature_overlay_button_tapped"
+        case .jetpackFullscreenOverlayDismissed:
+            return "remove_feature_overlay_dismissed"
+        case .jetpackSiteCreationOverlayDisplayed:
+            return "remove_site_creation_overlay_displayed"
+        case .jetpackSiteCreationOverlayButtonTapped:
+            return "remove_site_creation_overlay_button_tapped"
+        case .jetpackSiteCreationOverlayDismissed:
+            return "remove_site_creation_overlay_dismissed"
+        case .jetpackBrandingMenuCardDisplayed:
+            return "remove_feature_card_displayed"
+        case .jetpackBrandingMenuCardTapped:
+            return "remove_feature_card_tapped"
+        case .jetpackBrandingMenuCardLinkTapped:
+            return "remove_feature_card_link_tapped"
+        case .jetpackBrandingMenuCardHidden:
+            return "remove_feature_card_hide_tapped"
+        case .jetpackBrandingMenuCardRemindLater:
+            return "remove_feature_card_remind_later_tapped"
+        case .jetpackBrandingMenuCardContextualMenuAccessed:
+            return "remove_feature_card_menu_accessed"
+        case .jetpackFeatureIncorrectlyAccessed:
+            return "jetpack_feature_incorrectly_accessed"
 
         } // END OF SWITCH
     }

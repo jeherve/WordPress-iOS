@@ -48,6 +48,8 @@ import Combine
     private var noResultsStatusViewController = NoResultsViewController.controller()
     private var noFollowedSitesViewController: NoResultsViewController?
 
+    private lazy var readerPostStreamService = ReaderPostStreamService(coreDataStack: coreDataStack)
+
     var resultsStatusView: NoResultsViewController {
         get {
             guard let noFollowedSitesVC = noFollowedSitesViewController else {
@@ -58,18 +60,13 @@ import Combine
         }
     }
 
-    lazy var syncContext: NSManagedObjectContext = {
-        return ContextManager.sharedInstance().newDerivedContext()
-    }()
+    private var coreDataStack: CoreDataStack {
+        ContextManager.shared
+    }
 
-    lazy var service: ReaderPostService = {
-        return ReaderPostService(managedObjectContext: syncContext)
-    }()
-
-    /// An alias for the apps's main context – temporarily replaces  `newMainContextChildContext` until we have `NSPersistentContainer` support
-    ///
+    /// An alias for the apps's main context
     private var viewContext: NSManagedObjectContext {
-        ContextManager.sharedInstance().mainContext
+        coreDataStack.mainContext
     }
 
     private(set) lazy var footerView: PostListFooterView = {
@@ -352,6 +349,8 @@ import Combine
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
+        JetpackFeaturesRemovalCoordinator.presentOverlayIfNeeded(in: self, source: .reader)
+
         syncIfAppropriate()
     }
 
@@ -509,7 +508,9 @@ import Combine
         guard JetpackBrandingVisibility.all.enabled else {
             return
         }
-        let bannerView = JetpackBannerView() { [unowned self] in
+        let textProvider = JetpackBrandingTextProvider(screen: JetpackBannerScreen.reader)
+        let bannerView = JetpackBannerView()
+        bannerView.configure(title: textProvider.brandingText()) { [unowned self] in
             JetpackBrandingCoordinator.presentOverlay(from: self)
             JetpackBrandingAnalyticsHelper.trackJetpackPoweredBannerTapped(screen: .reader)
         }
@@ -801,7 +802,7 @@ import Combine
     }
 
     private func showFollowing() {
-        WPTabBarController.sharedInstance().switchToFollowedSites()
+        RootViewCoordinator.sharedPresenter.switchToFollowedSites()
     }
 
     // MARK: - Blocking
@@ -1016,46 +1017,48 @@ import Combine
             return
         }
 
-        syncContext.perform { [weak self] in
-            guard let topicInContext = (try? self?.syncContext.existingObject(with: topic.objectID)) as? ReaderAbstractTopic else {
+        let objectID = topic.objectID
+
+        let successBlock = { [weak self] (count: Int, hasMore: Bool) in
+            DispatchQueue.main.async {
+                if let strongSelf = self {
+                    if strongSelf.recentlyBlockedSitePostObjectIDs.count > 0 {
+                        strongSelf.recentlyBlockedSitePostObjectIDs.removeAllObjects()
+                        strongSelf.updateAndPerformFetchRequest()
+                    }
+                    strongSelf.updateLastSyncedForTopic(objectID)
+                }
+                success?(hasMore)
+            }
+        }
+
+        let failureBlock = { (error: Error?) in
+            DispatchQueue.main.async {
+                if let error = error {
+                    failure?(error as NSError)
+                }
+            }
+        }
+
+        self.fetch(for: topic, success: successBlock, failure: failureBlock)
+    }
+
+    func fetch(for originalTopic: ReaderAbstractTopic, success: @escaping ((_ count: Int, _ hasMore: Bool) -> Void), failure: @escaping ((_ error: Error?) -> Void)) {
+        coreDataStack.performAndSave { context in
+            guard let topic = (try? context.existingObject(with: originalTopic.objectID)) as? ReaderAbstractTopic else {
                 DDLogError("Error: Could not retrieve an existing topic via its objectID")
                 return
             }
 
-            let objectID = topicInContext.objectID
-
-            let successBlock = { [weak self] (count: Int, hasMore: Bool) in
-                DispatchQueue.main.async {
-                    if let strongSelf = self {
-                        if strongSelf.recentlyBlockedSitePostObjectIDs.count > 0 {
-                            strongSelf.recentlyBlockedSitePostObjectIDs.removeAllObjects()
-                            strongSelf.updateAndPerformFetchRequest()
-                        }
-                        strongSelf.updateLastSyncedForTopic(objectID)
-                    }
-                    success?(hasMore)
-                }
+            if ReaderHelpers.isTopicSearchTopic(topic) {
+                let service = ReaderPostService(managedObjectContext: context)
+                service.fetchPosts(for: topic, atOffset: 0, deletingEarlier: false, success: success, failure: failure)
+            } else if let topic = topic as? ReaderTagTopic {
+                self.readerPostStreamService.fetchPosts(for: topic, success: success, failure: failure)
+            } else {
+                let service = ReaderPostService(managedObjectContext: context)
+                service.fetchPosts(for: topic, earlierThan: Date(), success: success, failure: failure)
             }
-
-            let failureBlock = { (error: Error?) in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        failure?(error as NSError)
-                    }
-                }
-            }
-
-            self?.fetch(for: topicInContext, success: successBlock, failure: failureBlock)
-        }
-    }
-
-    func fetch(for topic: ReaderAbstractTopic, success: @escaping ((_ count: Int, _ hasMore: Bool) -> Void), failure: @escaping ((_ error: Error?) -> Void)) {
-        if ReaderHelpers.isTopicSearchTopic(topic) {
-            service.fetchPosts(for: topic, atOffset: 0, deletingEarlier: false, success: success, failure: failure)
-        } else if let topic = topic as? ReaderTagTopic {
-            service.fetchPostsV2(for: topic, success: success, failure: failure)
-        } else {
-            service.fetchPosts(for: topic, earlierThan: Date(), success: success, failure: failure)
         }
     }
 
@@ -1081,8 +1084,8 @@ import Combine
 
         let sortDate = post.sortDate
 
-        syncContext.perform { [weak self] in
-            guard let topicInContext = (try? self?.syncContext.existingObject(with: topic.objectID)) as? ReaderAbstractTopic else {
+        coreDataStack.performAndSave { [weak self] context in
+            guard let topicInContext = (try? context.existingObject(with: topic.objectID)) as? ReaderAbstractTopic else {
                 DDLogError("Error: Could not retrieve an existing topic via its objectID")
                 return
             }
@@ -1110,11 +1113,12 @@ import Combine
                 }
             }
 
+            let service = ReaderPostService(managedObjectContext: context)
             if ReaderHelpers.isTopicSearchTopic(topicInContext) {
                 assertionFailure("Search topics should no have a gap to fill.")
-                self?.service.fetchPosts(for: topicInContext, atOffset: 0, deletingEarlier: true, success: successBlock, failure: failureBlock)
+                service.fetchPosts(for: topicInContext, atOffset: 0, deletingEarlier: true, success: successBlock, failure: failureBlock)
             } else {
-                self?.service.fetchPosts(for: topicInContext, earlierThan: sortDate, deletingEarlier: true, success: successBlock, failure: failureBlock)
+                service.fetchPosts(for: topicInContext, earlierThan: sortDate, deletingEarlier: true, success: successBlock, failure: failureBlock)
             }
         }
     }
@@ -1128,37 +1132,30 @@ import Combine
 
         footerView.showSpinner(true)
 
-        syncContext.perform { [weak self] in
-            guard let topicInContext = (try? self?.syncContext.existingObject(with: topic.objectID)) as? ReaderAbstractTopic else {
-                DDLogError("Error: Could not retrieve an existing topic via its objectID")
+        let successBlock = { (count: Int, hasMore: Bool) in
+            DispatchQueue.main.async(execute: {
+                success?(hasMore)
+            })
+        }
+
+        let failureBlock = { (error: Error?) in
+            guard let error = error else {
                 return
             }
 
-            let successBlock = { (count: Int, hasMore: Bool) in
-                DispatchQueue.main.async(execute: {
-                    success?(hasMore)
-                })
-            }
-
-            let failureBlock = { (error: Error?) in
-                guard let error = error else {
-                    return
-                }
-
-                DispatchQueue.main.async(execute: {
-                    failure?(error as NSError)
-                })
-            }
-
-            self?.fetchMore(for: topicInContext, success: successBlock, failure: failureBlock)
+            DispatchQueue.main.async(execute: {
+                failure?(error as NSError)
+            })
         }
+
+        self.fetchMore(for: topic, success: successBlock, failure: failureBlock)
 
         if let properties = topicPropertyForStats() {
             WPAppAnalytics.track(.readerInfiniteScroll, withProperties: properties)
         }
     }
 
-    func fetchMore(for topic: ReaderAbstractTopic, success: @escaping ((Int, Bool) -> Void), failure: @escaping ((Error?) -> Void)) {
+    private func fetchMore(for originalTopic: ReaderAbstractTopic, success: @escaping ((Int, Bool) -> Void), failure: @escaping ((Error?) -> Void)) {
         guard
             let posts = content.content,
             let post = posts.last as? ReaderPost,
@@ -1168,14 +1165,23 @@ import Combine
             return
         }
 
-        if ReaderHelpers.isTopicSearchTopic(topic) {
-            let offset = UInt(content.contentCount)
-            service.fetchPosts(for: topic, atOffset: UInt(offset), deletingEarlier: false, success: success, failure: failure)
-        } else if let topic = topic as? ReaderTagTopic {
-            service.fetchPostsV2(for: topic, isFirstPage: false, success: success, failure: failure)
-        } else {
-            let earlierThan = sortDate
-            service.fetchPosts(for: topic, earlierThan: earlierThan, success: success, failure: failure)
+        coreDataStack.performAndSave { context in
+            guard let topic = (try? context.existingObject(with: originalTopic.objectID)) as? ReaderAbstractTopic else {
+                DDLogError("Error: Could not retrieve an existing topic via its objectID")
+                return
+            }
+
+            if ReaderHelpers.isTopicSearchTopic(topic) {
+                let service = ReaderPostService(managedObjectContext: context)
+                let offset = UInt(self.content.contentCount)
+                service.fetchPosts(for: topic, atOffset: UInt(offset), deletingEarlier: false, success: success, failure: failure)
+            } else if let topic = topic as? ReaderTagTopic {
+                self.readerPostStreamService.fetchPosts(for: topic, isFirstPage: false, success: success, failure: failure)
+            } else {
+                let service = ReaderPostService(managedObjectContext: context)
+                let earlierThan = sortDate
+                service.fetchPosts(for: topic, earlierThan: earlierThan, success: success, failure: failure)
+            }
         }
     }
 
@@ -1587,7 +1593,7 @@ extension ReaderStreamViewController: WPTableViewHandlerDelegate {
 
     private func resetReaderDiscoverNudgeFlow() {
         shouldShowCommentSpotlight = false
-        WPTabBarController.sharedInstance().resetReaderDiscoverNudgeFlow()
+        RootViewCoordinator.sharedPresenter.resetReaderDiscoverNudgeFlow()
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {

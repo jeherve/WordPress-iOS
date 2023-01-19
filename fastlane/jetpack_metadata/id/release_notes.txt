@@ -1,3 +1,0 @@
-Tautan pada lembar tindakan (menu pop-up pada perangkat Anda yang membuka opsi ekstra) sekarang berwarna biru, bukan hijau.
-
-Kami juga membuat Jetpack Social lebih mudah dikenali di bagian Berbagi pada pengaturan situs, serta pada pengaturan pos Anda. Mari berjejaring sosial.

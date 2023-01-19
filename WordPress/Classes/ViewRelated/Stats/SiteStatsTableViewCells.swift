@@ -38,12 +38,14 @@ struct ViewsVisitorsRow: ImmuTableRow {
     }()
 
     let segmentsData: [StatsSegmentedControlData]
+    let selectedSegment: StatsSegmentedControlData.Segment
     let action: ImmuTableAction? = nil
     let chartData: [LineChartDataConvertible]
     let chartStyling: [LineChartStyling]
     let period: StatsPeriodUnit?
     weak var statsLineChartViewDelegate: StatsLineChartViewDelegate?
     weak var siteStatsInsightsDelegate: SiteStatsInsightsDelegate?
+    weak var viewsAndVisitorsDelegate: StatsInsightsViewsAndVisitorsDelegate?
     let xAxisDates: [Date]
 
     func configureCell(_ cell: UITableViewCell) {
@@ -52,7 +54,7 @@ struct ViewsVisitorsRow: ImmuTableRow {
             return
         }
 
-        cell.configure(segmentsData: segmentsData, lineChartData: chartData, lineChartStyling: chartStyling, period: period, statsLineChartViewDelegate: statsLineChartViewDelegate, xAxisDates: xAxisDates, delegate: siteStatsInsightsDelegate)
+        cell.configure(row: self)
     }
 }
 
@@ -168,13 +170,13 @@ struct CustomizeInsightsRow: ImmuTableRow {
 
 struct LatestPostSummaryRow: ImmuTableRow {
 
-    static let cell: ImmuTableCell = {
+    static var cell: ImmuTableCell {
         if FeatureFlag.statsNewInsights.enabled {
             return ImmuTableCell.class(StatsLatestPostSummaryInsightsCell.self)
         } else {
             return ImmuTableCell.nib(LatestPostSummaryCell.defaultNib, LatestPostSummaryCell.self)
         }
-    }()
+    }
 
     let summaryData: StatsLastPostInsight?
     let chartData: StatsPostDetails?
@@ -336,7 +338,7 @@ struct TotalInsightStatsRow: ImmuTableRow {
             return
         }
 
-        cell.configure(count: dataRow.count, difference: dataRow.difference, percentage: dataRow.percentage, sparklineData: dataRow.sparklineData, guideText: dataRow.guideText, guideURL: dataRow.guideURL, statSection: statSection, siteStatsInsightsDelegate: siteStatsInsightsDelegate)
+        cell.configure(dataRow: dataRow, statSection: statSection, siteStatsInsightsDelegate: siteStatsInsightsDelegate)
     }
 }
 
@@ -350,6 +352,9 @@ struct AddInsightRow: ImmuTableRow {
     func configureCell(_ cell: UITableViewCell) {
         cell.textLabel?.text = StatSection.insightsAddInsight.title
         cell.accessoryView = UIImageView(image: WPStyleGuide.Stats.imageForGridiconType(.plus, withTint: .darkGrey))
+        cell.accessibilityTraits = .button
+        cell.accessibilityLabel = StatSection.insightsAddInsight.title
+        cell.accessibilityHint = NSLocalizedString("Tap to add new stats cards.", comment: "Accessibility hint for a button that opens a view that allows to add new stats cards.")
     }
 }
 
@@ -485,6 +490,7 @@ struct CountriesStatsRow: ImmuTableRow {
 
     let itemSubtitle: String
     let dataSubtitle: String
+    var statSection: StatSection?
     let dataRows: [StatsTotalRowData]
     weak var siteStatsPeriodDelegate: SiteStatsPeriodDelegate?
     weak var siteStatsInsightsDetailsDelegate: SiteStatsInsightsDelegate?
@@ -501,12 +507,14 @@ struct CountriesStatsRow: ImmuTableRow {
                        dataRows: dataRows,
                        siteStatsPeriodDelegate: siteStatsPeriodDelegate,
                        siteStatsInsightsDetailsDelegate: siteStatsInsightsDetailsDelegate)
+        cell.statSection = statSection
     }
 }
 
 struct CountriesMapRow: ImmuTableRow {
     let action: ImmuTableAction? = nil
     let countriesMap: CountriesMap
+    var statSection: StatSection?
 
     typealias CellType = CountriesMapCell
 
@@ -519,6 +527,7 @@ struct CountriesMapRow: ImmuTableRow {
             return
         }
         cell.configure(with: countriesMap)
+        cell.statSection = statSection
     }
 }
 

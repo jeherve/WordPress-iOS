@@ -60,10 +60,11 @@ final class InteractiveNotificationsManager: NSObject {
         let options: UNAuthorizationOptions = [.badge, .sound, .alert, .providesAppNotificationSettings]
 
         let notificationCenter = UNUserNotificationCenter.current()
-        notificationCenter.requestAuthorization(options: options) { (allowed, _)  in
+        notificationCenter.requestAuthorization(options: options) { [weak self] (allowed, _)  in
             DispatchQueue.main.async {
                 if allowed {
                     WPAnalytics.track(.pushNotificationOSAlertAllowed)
+                    self?.disableWordPressNotificationsIfNeeded()
                 } else {
                     WPAnalytics.track(.pushNotificationOSAlertDenied)
                 }
@@ -209,7 +210,7 @@ final class InteractiveNotificationsManager: NSObject {
                 if identifier == UNNotificationDefaultActionIdentifier {
                     let targetBlog: Blog? = blog(from: threadId)
 
-                    WPTabBarController.sharedInstance()?.mySitesCoordinator.showCreateSheet(for: targetBlog)
+                    RootViewCoordinator.sharedPresenter.mySitesCoordinator.showCreateSheet(for: targetBlog)
                 }
             case .weeklyRoundup:
                 let targetBlog = blog(from: userInfo)
@@ -225,7 +226,7 @@ final class InteractiveNotificationsManager: NSObject {
 
                     let targetDate = date(from: userInfo)
 
-                    WPTabBarController.sharedInstance()?.mySitesCoordinator.showStats(
+                    RootViewCoordinator.sharedPresenter.mySitesCoordinator.showStats(
                         for: targetBlog,
                         timePeriod: .weeks,
                         date: targetDate)
@@ -235,7 +236,7 @@ final class InteractiveNotificationsManager: NSObject {
                 WPAnalytics.track(.bloggingRemindersNotificationReceived, properties: ["prompt_included": true])
 
                 let answerPromptBlock = {
-                    WPTabBarController.sharedInstance()?.showPromptAnsweringFlow(with: userInfo)
+                    RootViewCoordinator.shared.showPromptAnsweringFlow(with: userInfo)
                 }
 
                 // check if user interacted with custom notification actions.
@@ -345,7 +346,7 @@ private extension InteractiveNotificationsManager {
     /// - Parameter noteID: The Notification's Identifier
     ///
     func showDetailsWithNoteID(_ noteId: NSNumber) {
-        WPTabBarController.sharedInstance().showNotificationsTabForNote(withID: noteId.stringValue)
+        RootViewCoordinator.sharedPresenter.showNotificationsTabForNote(withID: noteId.stringValue)
     }
 
 
@@ -618,11 +619,7 @@ extension InteractiveNotificationsManager: UNUserNotificationCenterDelegate {
         if notification.request.content.categoryIdentifier == NoteCategoryDefinition.bloggingReminderWeekly.rawValue
             || notification.request.content.categoryIdentifier == NoteCategoryDefinition.weeklyRoundup.rawValue {
 
-            if #available(iOS 14.0, *) {
-                completionHandler([.banner, .list, .sound])
-            } else {
-                completionHandler([.alert, .sound])
-            }
+            completionHandler([.banner, .list, .sound])
             return
         }
 
@@ -685,5 +682,13 @@ extension InteractiveNotificationsManager: UNUserNotificationCenterDelegate {
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, openSettingsFor notification: UNNotification?) {
         MeNavigationAction.notificationSettings.perform(router: UniversalLinkRouter.shared)
+    }
+}
+
+private extension InteractiveNotificationsManager {
+    /// A temporary setting to allow controlling WordPress notifications when they are disabled after Jetpack installation
+    /// Disable WordPress notifications when they are enabled on Jetpack
+    func disableWordPressNotificationsIfNeeded() {
+        JetpackNotificationMigrationService.shared.disableWordPressNotificationsFromJetpack()
     }
 }

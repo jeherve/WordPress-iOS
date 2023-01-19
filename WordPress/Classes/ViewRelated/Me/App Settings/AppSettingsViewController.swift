@@ -287,9 +287,7 @@ class AppSettingsViewController: UITableViewController {
 
             tableView?.deselectSelectedRowWithAnimation(true)
 
-            if #available(iOS 12.0, *) {
-                NSUserActivity.deleteAllSavedUserActivities {}
-            }
+            NSUserActivity.deleteAllSavedUserActivities {}
 
             let notice = Notice(title: NSLocalizedString("Siri Reset Confirmation", value: "Successfully cleared Siri Shortcut Suggestions", comment: "Notice displayed to the user after clearing the Siri activity donations."), feedbackType: .success)
             ActionDispatcher.dispatch(NoticeAction.post(notice))
@@ -314,7 +312,7 @@ class AppSettingsViewController: UITableViewController {
                 return
             }
             self.tableView.deselectSelectedRowWithAnimation(true)
-            WPTabBarController.sharedInstance().presentWhatIsNew(on: self)
+            RootViewCoordinator.shared.presentWhatIsNew(on: self)
         }
     }
 
@@ -460,14 +458,12 @@ private extension AppSettingsViewController {
             spotlightClearCacheRow
         ]
 
-        if #available(iOS 12.0, *) {
-            let siriClearCacheRow = BrandedNavigationRow(
-                title: NSLocalizedString("Siri Reset Prompt", value: "Clear Siri Shortcut Suggestions", comment: "Label for button that clears user activities donated to Siri."),
-                action: clearSiriActivityDonations(),
-                accessibilityIdentifier: "spotlightClearCacheButton")
+        let siriClearCacheRow = BrandedNavigationRow(
+            title: NSLocalizedString("Siri Reset Prompt", value: "Clear Siri Shortcut Suggestions", comment: "Label for button that clears user activities donated to Siri."),
+            action: clearSiriActivityDonations(),
+            accessibilityIdentifier: "spotlightClearCacheButton")
 
-            tableRows.append(siriClearCacheRow)
-        }
+        tableRows.append(siriClearCacheRow)
 
         tableRows.append(mediaRemoveLocation)
         let removeLocationFooterText = NSLocalizedString("Removes location metadata from photos before uploading them to your site.", comment: "Explanatory text for removing the location from uploaded media.")
@@ -505,7 +501,7 @@ private extension AppSettingsViewController {
             rows.insert(iconRow, at: 0)
         }
 
-        if FeatureFlag.mySiteDashboard.enabled {
+        if JetpackFeaturesRemovalCoordinator.jetpackFeaturesEnabled() {
             let initialScreen = NavigationItemRow(title: NSLocalizedString("Initial Screen", comment: "Title of the option to change the default initial screen"), detail: MySiteSettings().defaultSection.title, action: pushInitialScreenSettings())
 
             rows.append(initialScreen)
@@ -515,7 +511,7 @@ private extension AppSettingsViewController {
             rows.append(debugRow)
         }
 
-        if let presenter = WPTabBarController.sharedInstance()?.whatIsNewScenePresenter as? WhatIsNewScenePresenter,
+        if let presenter = RootViewCoordinator.shared.whatIsNewScenePresenter as? WhatIsNewScenePresenter,
             presenter.versionHasAnnouncements,
             AppConfiguration.showsWhatIsNew {
             let whatIsNewRow = NavigationItemRow(title: AppConstants.Settings.whatIsNewTitle,
@@ -542,7 +538,10 @@ extension AppSettingsViewController {
               JetpackBrandingVisibility.all.enabled else {
             return nil
         }
-        let jetpackButton = JetpackButton.makeBadgeView(target: self, selector: #selector(jetpackButtonTapped))
+        let textProvider = JetpackBrandingTextProvider(screen: JetpackBadgeScreen.appSettings)
+        let jetpackButton = JetpackButton.makeBadgeView(title: textProvider.brandingText(),
+                                                        target: self,
+                                                        selector: #selector(jetpackButtonTapped))
 
         return jetpackButton
     }

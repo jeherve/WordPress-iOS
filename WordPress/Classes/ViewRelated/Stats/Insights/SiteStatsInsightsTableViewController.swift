@@ -16,6 +16,7 @@ class SiteStatsInsightsTableViewController: SiteStatsBaseTableViewController, St
     private var insightsToShow: [InsightType] {
         get {
             SiteStatsInformation.sharedInstance.getCurrentSiteInsights()
+                .filter(StatSection.allInsights.compactMap(\.insightType).contains)
         }
 
         set {
@@ -119,6 +120,7 @@ private extension SiteStatsInsightsTableViewController {
     func initViewModel() {
         viewModel = SiteStatsInsightsViewModel(insightsToShow: insightsToShow,
                                                insightsDelegate: self,
+                                               viewsAndVisitorsDelegate: self,
                                                insightsStore: insightsStore,
                                                pinnedItemStore: pinnedItemStore)
         addViewModelListeners()
@@ -359,7 +361,7 @@ extension SiteStatsInsightsTableViewController: SiteStatsInsightsDelegate {
     }
 
     func showCreatePost() {
-        WPTabBarController.sharedInstance().showPostTab { [weak self] in
+        RootViewCoordinator.sharedPresenter.showPostTab { [weak self] in
             self?.refreshInsights()
         }
     }
@@ -422,7 +424,7 @@ extension SiteStatsInsightsTableViewController: SiteStatsInsightsDelegate {
 
         if FeatureFlag.statsNewInsights.enabled {
             switch statSection {
-            case .insightsViewsVisitors, .insightsFollowersWordPress, .insightsFollowersEmail, .insightsFollowerTotals, .insightsLikesTotals, .insightsCommentsTotals:
+            case .insightsViewsVisitors, .insightsFollowerTotals, .insightsLikesTotals, .insightsCommentsTotals:
                 segueToInsightsDetails(statSection: statSection, selectedDate: selectedDate)
             default:
                 segueToDetails(statSection: statSection, selectedDate: selectedDate)
@@ -518,9 +520,8 @@ extension SiteStatsInsightsTableViewController: SiteStatsInsightsDelegate {
             }
 
             self.navigationController?.popToRootViewController(animated: false)
-            WPTabBarController.sharedInstance().showReaderTab()
-            if let nc = WPTabBarController.sharedInstance().selectedViewController as? UINavigationController,
-               let vc = nc.topViewController as? ReaderTabViewController {
+            RootViewCoordinator.sharedPresenter.showReaderTab()
+            if let vc = RootViewCoordinator.sharedPresenter.readerTabViewController {
                 vc.presentDiscoverTab()
             }
         }
@@ -622,6 +623,17 @@ extension SiteStatsInsightsTableViewController: StatsInsightsManagementDelegate 
         insightsToShow = insightTypes
         refreshInsights(forceRefresh: true)
         updateView()
+    }
+}
+
+// MARK: - ViewsVisitorsDelegate
+
+extension SiteStatsInsightsTableViewController: StatsInsightsViewsAndVisitorsDelegate {
+    func viewsAndVisitorsSegmendChanged(to selectedSegmentIndex: Int) {
+        if let selectedSegment = StatsSegmentedControlData.Segment(rawValue: selectedSegmentIndex) {
+            viewModel?.updateViewsAndVisitorsSegment(selectedSegment)
+            refreshTableView()
+        }
     }
 }
 

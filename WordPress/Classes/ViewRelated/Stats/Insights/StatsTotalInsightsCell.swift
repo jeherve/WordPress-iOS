@@ -12,16 +12,23 @@ struct StatsTotalInsightsData {
     // Used to allow a URL to be displayed in response to a guide being tapped
     var guideURL: URL? = nil
 
+    var lastPostInsight: StatsLastPostInsight? = nil
+    var statsSummaryType: StatsSummaryType? = nil
+
     public static func followersCount(insightsStore: StatsInsightsStore) -> StatsTotalInsightsData {
         return StatsTotalInsightsData(count: insightsStore.getTotalFollowerCount())
     }
 
-    public static func createTotalInsightsData(periodStore: StatsPeriodStore, insightsStore: StatsInsightsStore, statsSummaryType: StatsSummaryType, guideText: NSAttributedString? = nil) -> StatsTotalInsightsData {
-        guard let periodSummary = periodStore.getSummary() else {
+    public static func createTotalInsightsData(periodSummary: StatsSummaryTimeIntervalData?,
+                                               insightsStore: StatsInsightsStore,
+                                               statsSummaryType: StatsSummaryType,
+                                               periodEndDate: Date? = nil) -> StatsTotalInsightsData {
+
+        guard let periodSummary = periodSummary else {
             return StatsTotalInsightsData(count: 0)
         }
 
-        let splitSummaryTimeIntervalData = SiteStatsInsightsViewModel.splitStatsSummaryTimeIntervalData(periodSummary)
+        let splitSummaryTimeIntervalData = SiteStatsInsightsViewModel.splitStatsSummaryTimeIntervalData(periodSummary, periodEndDate: periodEndDate)
 
         var countKey: KeyPath<StatsSummaryData, Int>
         switch statsSummaryType {
@@ -34,11 +41,11 @@ struct StatsTotalInsightsData {
         }
 
         let sparklineData: [Int] = makeSparklineData(countKey: countKey, splitSummaryTimeIntervalData: splitSummaryTimeIntervalData)
-        let data = SiteStatsInsightsViewModel.intervalData(periodSummary, summaryType: statsSummaryType)
-        let guideText = makeTotalInsightsGuideText(insightsStore: insightsStore, statsSummaryType: statsSummaryType)
+        let data = SiteStatsInsightsViewModel.intervalData(periodSummary, summaryType: statsSummaryType, periodEndDate: periodEndDate)
+        let guideText = makeTotalInsightsGuideText(lastPostInsight: insightsStore.getLastPostInsight(), statsSummaryType: statsSummaryType)
         let guideURL: URL? = statsSummaryType == .likes ? insightsStore.getLastPostInsight()?.url : nil
 
-        return StatsTotalInsightsData(count: data.count, difference: data.difference, percentage: data.percentage, sparklineData: sparklineData, guideText: guideText, guideURL: guideURL)
+        return StatsTotalInsightsData(count: data.count, difference: data.difference, percentage: data.percentage, sparklineData: sparklineData, guideText: guideText, guideURL: guideURL, lastPostInsight: insightsStore.getLastPostInsight(), statsSummaryType: statsSummaryType)
     }
 
     static func makeSparklineData(countKey: KeyPath<StatsSummaryData, Int>, splitSummaryTimeIntervalData: [StatsSummaryTimeIntervalDataAsAWeek]) -> [Int] {
@@ -57,10 +64,10 @@ struct StatsTotalInsightsData {
         return sparklineData
     }
 
-    public static func makeTotalInsightsGuideText(insightsStore: StatsInsightsStore, statsSummaryType: StatsSummaryType) -> NSAttributedString? {
+    public static func makeTotalInsightsGuideText(lastPostInsight: StatsLastPostInsight?, statsSummaryType: StatsSummaryType) -> NSAttributedString? {
         switch statsSummaryType {
         case .likes:
-            guard let summary = insightsStore.getLastPostInsight() else {
+            guard let summary = lastPostInsight else {
                 return nil
             }
 
@@ -79,16 +86,18 @@ struct StatsTotalInsightsData {
         }
     }
 
-    private static var guideAttributes: StyledHTMLAttributes = [
-        .BodyAttribute: [
-            .font: UIFont.preferredFont(forTextStyle: .subheadline),
-            .foregroundColor: UIColor.text
-        ],
-        .ATagAttribute: [
-            .foregroundColor: UIColor.primary,
-            .underlineStyle: 0
+    private static var guideAttributes: StyledHTMLAttributes {
+        [
+            .BodyAttribute: [
+                .font: UIFont.preferredFont(forTextStyle: .subheadline),
+                .foregroundColor: UIColor.text
+            ],
+            .ATagAttribute: [
+                .foregroundColor: UIColor.primary,
+                .underlineStyle: 0
+            ]
         ]
-    ]
+    }
 
     private enum Constants {
         static let singularLikeCount = 1
@@ -97,14 +106,16 @@ struct StatsTotalInsightsData {
     private enum TextContent {
         static let likesTotalGuideTextSingular = NSLocalizedString("Your latest post <a href=\"\">%@</a> has received <strong>one</strong> like.", comment: "A hint shown to the user in stats informing the user that one of their posts has received a like. The %@ placeholder will be replaced with the title of a post, and the HTML tags should remain intact.")
         static let likesTotalGuideTextPlural = NSLocalizedString("Your latest post <a href=\"\">%@</a> has received <strong>%d</strong> likes.", comment: "A hint shown to the user in stats informing the user how many likes one of their posts has received. The %@ placeholder will be replaced with the title of a post, the %d with the number of likes, and the HTML tags should remain intact.")
-        static let commentsTotalGuideText = NSLocalizedString("Tap \"Week\" to see your top commenters.", comment: "A hint shown to the user in stats telling them how to navigate to the Comments detail view.")
+        static let commentsTotalGuideText = NSLocalizedString("Tap \"View more\" to see your top commenters.", comment: "A hint shown to the user in stats telling them how to navigate to the Comments detail view.")
     }
 }
 
 class StatsTotalInsightsCell: StatsBaseCell {
     private weak var siteStatsInsightsDelegate: SiteStatsInsightsDelegate?
     private var lastPostInsight: StatsLastPostInsight?
-    private var guideURL: URL? = nil
+    private var statsSummaryType: StatsSummaryType?
+    private var guideURL: URL?
+    private var guideText: NSAttributedString?
 
     private let outerStackView = UIStackView()
     private let topInnerStackView = UIStackView()
@@ -135,6 +146,12 @@ class StatsTotalInsightsCell: StatsBaseCell {
 
         guideViewLabel.text = ""
         guideView.removeFromSuperview()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+
+        rebuildGuideViewIfNeeded()
     }
 
     private func configureView() {
@@ -186,6 +203,7 @@ class StatsTotalInsightsCell: StatsBaseCell {
         countLabel.font = WPStyleGuide.Stats.insightsCountFont
         countLabel.textColor = .text
         countLabel.text = "0"
+        countLabel.adjustsFontForContentSizeCategory = true
         countLabel.adjustsFontSizeToFitWidth = true
         countLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         countLabel.setContentHuggingPriority(.required, for: .vertical)
@@ -215,25 +233,28 @@ class StatsTotalInsightsCell: StatsBaseCell {
         guideView.pinSubviewToAllEdges(guideViewLabel, insets: UIEdgeInsets(allEdges: 16.0), priority: .required)
     }
 
-    func configure(count: Int, difference: Int? = nil, percentage: Int? = nil, sparklineData: [Int]? = nil, guideText: NSAttributedString? = nil, guideURL: URL? = nil, statSection: StatSection, siteStatsInsightsDelegate: SiteStatsInsightsDelegate?) {
-        self.guideURL = guideURL
+    func configure(dataRow: StatsTotalInsightsData, statSection: StatSection, siteStatsInsightsDelegate: SiteStatsInsightsDelegate?) {
+        self.guideURL = dataRow.guideURL
 
         self.statSection = statSection
+        self.lastPostInsight = dataRow.lastPostInsight
+        self.statsSummaryType = dataRow.statsSummaryType
+        self.guideText = dataRow.guideText
         self.siteStatsInsightsDelegate = siteStatsInsightsDelegate
         self.siteStatsInsightDetailsDelegate = siteStatsInsightsDelegate
 
-        graphView.data = sparklineData ?? []
-        graphView.chartColor = chartColor(for: difference ?? 0)
+        graphView.data = dataRow.sparklineData ?? []
+        graphView.chartColor = chartColor(for: dataRow.difference ?? 0)
 
-        countLabel.text = count.abbreviatedString()
+        countLabel.text = dataRow.count.abbreviatedString()
 
-        updateGuideView(withGuideText: guideText)
-        updateComparisonLabel(withCount: count, difference: difference, percentage: percentage)
+        updateGuideView(withGuideText: dataRow.guideText)
+        updateComparisonLabel(withCount: dataRow.count, difference: dataRow.difference, percentage: dataRow.percentage)
     }
 
     private func updateGuideView(withGuideText guideText: NSAttributedString?) {
         if let guideText = guideText,
-           guideText.string.isEmpty == false {
+            guideText.string.isEmpty == false {
             outerStackView.addArrangedSubview(guideView)
 
             guideViewLabel.attributedText = addTipEmojiToGuide(guideText)
@@ -243,6 +264,16 @@ class StatsTotalInsightsCell: StatsBaseCell {
 
         } else if guideView.superview != nil {
             guideView.removeFromSuperview()
+        }
+    }
+
+    // Rebuilds guide view for accessibility only if guide view already exists
+    private func rebuildGuideViewIfNeeded() {
+        if guideText != nil,
+           let statsSummaryType = statsSummaryType,
+           let guideText = StatsTotalInsightsData.makeTotalInsightsGuideText(lastPostInsight: lastPostInsight, statsSummaryType: statsSummaryType) {
+            self.guideText = guideText
+            updateGuideView(withGuideText: guideText)
         }
     }
 
@@ -345,8 +376,14 @@ class StatsTotalInsightsCell: StatsBaseCell {
 
     private enum TextContent {
         static let differenceDelimiter = Character("*")
-        static let differenceHigher = NSLocalizedString("*%@%@ (%@%%)* higher than the previous week", comment: "Label shown on some metrics in the Stats Insights section, such as Comments count. The placeholders will be populated with a change and a percentage – e.g. '+17 (40%) higher than the previous week'. The *s mark the numerical values, which will be highlighted differently from the rest of the text.")
-        static let differenceLower = NSLocalizedString("*%@%@ (%@%%)* lower than the previous week", comment: "Label shown on some metrics in the Stats Insights section, such as Comments count. The placeholders will be populated with a change and a percentage – e.g. '-17 (40%) lower than the previous week'. The *s mark the numerical values, which will be highlighted differently from the rest of the text.")
-        static let differenceSame = NSLocalizedString("The same as the previous week", comment: "Label shown in Stats Insights when a metric is showing the same level as the previous week")
+        static let differenceHigher = NSLocalizedString("stats.insights.label.totalLikes.higher",
+                                                        value: "*%@%@ (%@%%)* higher than the previous 7-days",
+                                                        comment: "Label shown on some metrics in the Stats Insights section, such as Comments count. The placeholders will be populated with a change and a percentage – e.g. '+17 (40%) higher than the previous 7-days'. The *s mark the numerical values, which will be highlighted differently from the rest of the text.")
+        static let differenceLower = NSLocalizedString("stats.insights.label.totalLikes.higher",
+                                                       value: "*%@%@ (%@%%)* lower than the previous 7-days",
+                                                       comment: "Label shown on some metrics in the Stats Insights section, such as Comments count. The placeholders will be populated with a change and a percentage – e.g. '-17 (40%) lower than the previous 7-days'. The *s mark the numerical values, which will be highlighted differently from the rest of the text.")
+        static let differenceSame = NSLocalizedString("stats.insights.label.totalLikes.same",
+                                                      value: "The same as the previous 7-days",
+                                                      comment: "Label shown in Stats Insights when a metric is showing the same level as the previous 7 days")
     }
 }

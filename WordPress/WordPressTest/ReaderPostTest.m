@@ -5,7 +5,7 @@
 
 @interface ReaderPostTest : XCTestCase
 
-@property (nonatomic, strong) ContextManagerMock *coreDataStack;
+@property (nonatomic, strong) id<CoreDataStack> coreDataStack;
 
 @end
 
@@ -15,7 +15,7 @@
 
 - (void)setUp
 {
-    self.coreDataStack = [[ContextManagerMock alloc] init];
+    self.coreDataStack = [self coreDataStackForTesting];
 }
 
 - (void)tearDown

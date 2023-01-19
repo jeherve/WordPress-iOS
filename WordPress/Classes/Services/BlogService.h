@@ -17,45 +17,6 @@ extern NSString *const WPBlogUpdatedNotification;
 - (instancetype) init __attribute__((unavailable("must use initWithManagedObjectContext")));
 
 /**
- Returns the blog that matches with a given blogID and account.username
- */
-- (nullable Blog *)blogByBlogId:(NSNumber *)blogID andUsername:(NSString *)username;
-
-/**
- Returns the blog that matches with a given hostname
- */
-- (nullable Blog *)blogByHostname:(NSString *)hostname;
-
-/**
- Returns the blog currently flagged as the one last used, or the primary blog,
- or the first blog in an alphanumerically sorted list, whichever is found first.
- */
-- (nullable Blog *)lastUsedOrFirstBlog;
-
-/**
- Returns the blog currently flagged as the one last used, or the primary blog,
- or the first blog in an alphanumerically sorted list that supports the given
- feature, whichever is found first.
- */
-- (nullable Blog *)lastUsedOrFirstBlogThatSupports:(BlogFeature)feature;
-
-/**
- Returns the blog currently flaged as the one last used.
- */
-- (nullable Blog *)lastUsedBlog;
-
-/**
- Returns the first blog in an alphanumerically sorted list.
- */
-- (nullable Blog *)firstBlog;
-
-/**
- Returns the default WPCom blog.
- */
-- (nullable Blog *)primaryBlog;
-
-
-/**
  *  Sync all available blogs for an acccount
  *
  *  @param account the account for the associated blogs.
@@ -165,32 +126,7 @@ extern NSString *const WPBlogUpdatedNotification;
  */
 - (void)updatePassword:(NSString *)password forBlog:(Blog *)blog;
 
-- (BOOL)hasVisibleWPComAccounts;
-
 - (BOOL)hasAnyJetpackBlogs;
-
-- (NSInteger)blogCountForAllAccounts;
-
-- (NSInteger)blogCountSelfHosted;
-
-- (NSInteger)blogCountForWPComAccounts;
-
-- (NSInteger)blogCountVisibleForWPComAccounts;
-
-- (NSInteger)blogCountVisibleForAllAccounts;
-
-- (NSArray<Blog *> *)blogsForAllAccounts;
-
-- (NSArray<Blog *> *)visibleBlogsForWPComAccounts;
-
-- (NSArray *)blogsWithNoAccount;
-
-- (NSArray *)blogsWithPredicate:(NSPredicate *)predicate;
-
-/**
- Returns every stored blog, arranged in a Dictionary by blogId.
- */
-- (NSDictionary *)blogsForAllAccountsById;
 
 - (void)removeBlog:(Blog *)blog;
 
@@ -210,31 +146,6 @@ extern NSString *const WPBlogUpdatedNotification;
  */
 - (nullable Blog *)findBlogWithXmlrpc:(NSString *)xmlrpc
                             inAccount:(WPAccount *)account;
-
-/**
- Searches for a `Blog` object for this account with the given username
-
- @param xmlrpc the XML-RPC endpoint URL as a string
- @param username the blog's username
- @return the blog if one was found, otherwise it returns nil
- */
-- (nullable Blog *)findBlogWithXmlrpc:(NSString *)xmlrpc
-                          andUsername:(NSString *)username;
-
-/**
- Creates a blank `Blog` object for this account
-
- @param account the account the blog belongs to
- @return the newly created blog
- */
-- (Blog *)createBlogWithAccount:(WPAccount *)account;
-
-/**
- Creates a blank `Blog` object with no account
-
- @return the newly created blog
- */
-- (Blog *)createBlog;
 
 @end
 

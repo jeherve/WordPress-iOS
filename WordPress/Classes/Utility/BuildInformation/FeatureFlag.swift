@@ -3,6 +3,7 @@
 @objc
 enum FeatureFlag: Int, CaseIterable, OverrideableFlag {
     case bloggingPrompts
+    case bloggingPromptsEnhancements
     case jetpackDisconnect
     case debugMenu
     case readerCSS
@@ -17,10 +18,8 @@ enum FeatureFlag: Int, CaseIterable, OverrideableFlag {
     case weeklyRoundupBGProcessingTask
     case domains
     case timeZoneSuggester
-    case mySiteDashboard
     case mediaPickerPermissionsNotice
     case notificationCommentDetails
-    case statsPerformanceImprovements
     case siteIntentQuestion
     case landInTheEditor
     case statsNewAppearance
@@ -32,11 +31,18 @@ enum FeatureFlag: Int, CaseIterable, OverrideableFlag {
     case featureHighlightTooltip
     case jetpackPowered
     case jetpackPoweredBottomSheet
-    case sharedUserDefaults
-    case sharedLogin
-    case newLandingScreen
+    case contentMigration
+    case newJetpackLandingScreen
+    case newWordPressLandingScreen
     case newCoreDataContext
     case jetpackPluginInstallPrompt
+    case jetpackMigrationPreventDuplicateNotifications
+    case jetpackFeaturesRemovalPhaseOne
+    case jetpackFeaturesRemovalPhaseTwo
+    case jetpackFeaturesRemovalPhaseThree
+    case jetpackFeaturesRemovalPhaseFour
+    case jetpackFeaturesRemovalPhaseNewUsers
+    case jetpackFeaturesRemovalPhaseSelfHosted
 
     /// Returns a boolean indicating if the feature is enabled
     var enabled: Bool {
@@ -47,6 +53,8 @@ enum FeatureFlag: Int, CaseIterable, OverrideableFlag {
         switch self {
         case .bloggingPrompts:
             return AppConfiguration.isJetpack
+        case .bloggingPromptsEnhancements:
+            return false
         case .jetpackDisconnect:
             return BuildConfiguration.current == .localDeveloper
         case .debugMenu:
@@ -79,13 +87,9 @@ enum FeatureFlag: Int, CaseIterable, OverrideableFlag {
             return true
         case .timeZoneSuggester:
             return true
-        case .mySiteDashboard:
-            return true
         case .mediaPickerPermissionsNotice:
             return true
         case .notificationCommentDetails:
-            return true
-        case .statsPerformanceImprovements:
             return true
         case .siteIntentQuestion:
             return true
@@ -108,14 +112,28 @@ enum FeatureFlag: Int, CaseIterable, OverrideableFlag {
         case .jetpackPowered:
             return true
         case .jetpackPoweredBottomSheet:
-            return false
-        case .sharedUserDefaults:
-            return false
-        case .sharedLogin:
-            return false
-        case .newLandingScreen:
+            return true
+        case .contentMigration:
+            return true
+        case .newJetpackLandingScreen:
+            return true
+        case .newWordPressLandingScreen:
             return false
         case .newCoreDataContext:
+            return true
+        case .jetpackMigrationPreventDuplicateNotifications:
+            return true
+        case .jetpackFeaturesRemovalPhaseOne:
+            return false
+        case .jetpackFeaturesRemovalPhaseTwo:
+            return false
+        case .jetpackFeaturesRemovalPhaseThree:
+            return false
+        case .jetpackFeaturesRemovalPhaseFour:
+            return false
+        case .jetpackFeaturesRemovalPhaseNewUsers:
+            return false
+        case .jetpackFeaturesRemovalPhaseSelfHosted:
             return false
         case .jetpackPluginInstallPrompt:
             return BuildConfiguration.current ~= [.localDeveloper, .a8cBranchTest]
@@ -129,6 +147,20 @@ enum FeatureFlag: Int, CaseIterable, OverrideableFlag {
     /// This key must match the server-side one for remote feature flagging
     var remoteKey: String? {
         switch self {
+        case .jetpackFeaturesRemovalPhaseOne:
+            return "jp_removal_one"
+        case .jetpackFeaturesRemovalPhaseTwo:
+            return "jp_removal_two"
+        case .jetpackFeaturesRemovalPhaseThree:
+            return "jp_removal_three"
+        case .jetpackFeaturesRemovalPhaseFour:
+            return "jp_removal_four"
+        case .jetpackFeaturesRemovalPhaseNewUsers:
+            return "jp_removal_new_users"
+        case .jetpackFeaturesRemovalPhaseSelfHosted:
+            return "jp_removal_self_hosted"
+        case .jetpackMigrationPreventDuplicateNotifications:
+            return "prevent_duplicate_notifs_remote_field"
             default:
                 return nil
         }
@@ -151,6 +183,8 @@ extension FeatureFlag {
         switch self {
         case .bloggingPrompts:
             return "Blogging Prompts"
+        case .bloggingPromptsEnhancements:
+            return "Blogging Prompts Enhancements"
         case .jetpackDisconnect:
             return "Jetpack disconnect"
         case .debugMenu:
@@ -179,14 +213,10 @@ extension FeatureFlag {
             return "Domain Purchases"
         case .timeZoneSuggester:
             return "TimeZone Suggester"
-        case .mySiteDashboard:
-            return "My Site Dashboard"
         case .mediaPickerPermissionsNotice:
             return "Media Picker Permissions Notice"
         case .notificationCommentDetails:
             return "Notification Comment Details"
-        case .statsPerformanceImprovements:
-            return "Stats Performance Improvements"
         case .siteIntentQuestion:
             return "Site Intent Question"
         case .landInTheEditor:
@@ -209,16 +239,30 @@ extension FeatureFlag {
             return "Jetpack powered banners and badges"
         case .jetpackPoweredBottomSheet:
             return "Jetpack powered bottom sheet"
-        case .sharedUserDefaults:
-            return "Shared User Defaults"
-        case .sharedLogin:
-            return "Shared Login"
-        case .newLandingScreen:
-            return "Jetpack and WordPress new landing screens"
+        case .contentMigration:
+            return "Content Migration"
+        case .newJetpackLandingScreen:
+            return "New Jetpack landing screen"
+        case .newWordPressLandingScreen:
+            return "New WordPress landing screen"
         case .newCoreDataContext:
             return "Use new Core Data context structure (Require app restart)"
         case .jetpackPluginInstallPrompt:
             return "Jetpack plugin install prompt after login"
+        case .jetpackMigrationPreventDuplicateNotifications:
+            return "Jetpack Migration prevent duplicate WordPress app notifications when Jetpack is installed"
+        case .jetpackFeaturesRemovalPhaseOne:
+            return "Jetpack Features Removal Phase One"
+        case .jetpackFeaturesRemovalPhaseTwo:
+            return "Jetpack Features Removal Phase Two"
+        case .jetpackFeaturesRemovalPhaseThree:
+            return "Jetpack Features Removal Phase Three"
+        case .jetpackFeaturesRemovalPhaseFour:
+            return "Jetpack Features Removal Phase Four"
+        case .jetpackFeaturesRemovalPhaseNewUsers:
+            return "Jetpack Features Removal Phase For New Users"
+        case .jetpackFeaturesRemovalPhaseSelfHosted:
+            return "Jetpack Features Removal Phase For Self-Hosted Sites"
         }
     }
 

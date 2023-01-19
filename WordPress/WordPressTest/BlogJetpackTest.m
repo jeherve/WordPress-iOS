@@ -3,7 +3,7 @@
 
 #import "Blog.h"
 #import "WPAccount.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "AccountService.h"
 #import "BlogService.h"
 #import "WordPressTest-Swift.h"
@@ -17,15 +17,14 @@
 
 @property (nonatomic, strong) WPAccount *account;
 @property (nonatomic, strong) Blog *blog;
-@property (nonatomic, strong) ContextManagerMock *testContextManager;
+@property (nonatomic, strong) id<CoreDataStack> testContextManager;
 @end
 
 @implementation BlogJetpackTest
 
 - (void)setUp {
     [super setUp];
-    self.testContextManager = [[ContextManagerMock alloc] init];
-    [self.testContextManager useAsSharedInstanceUntilTestFinished:self];
+    self.testContextManager = [self coreDataStackForTesting];
 
     _blog = (Blog *)[NSEntityDescription insertNewObjectForEntityForName:@"Blog"
                                                   inManagedObjectContext:self.testContextManager.mainContext];
@@ -106,12 +105,12 @@
     BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:self.testContextManager.mainContext];
     WPAccount *wpComAccount = [accountService createOrUpdateAccountWithUsername:@"user" authToken:@"token"];
 
-    Blog *dotcomBlog = [blogService createBlogWithAccount:wpComAccount];
+    Blog *dotcomBlog = [Blog createBlankBlogWithAccount:wpComAccount];
     dotcomBlog.xmlrpc = @"https://dotcom1.wordpress.com/xmlrpc.php";
     dotcomBlog.url = @"https://dotcom1.wordpress.com/";
     dotcomBlog.dotComID = @1;
 
-    Blog *jetpackLegacyBlog = [blogService createBlog];
+    Blog *jetpackLegacyBlog = [Blog createBlankBlogInContext:self.testContextManager.mainContext];
     jetpackLegacyBlog.username = @"jetpack";
     jetpackLegacyBlog.xmlrpc = @"http://jetpack.example.com/xmlrpc.php";
     jetpackLegacyBlog.url = @"http://jetpack.example.com/";
@@ -133,7 +132,7 @@
     // test.blog + wp.com + jetpack
     XCTAssertEqual(1, [accountService numberOfAccounts]);
     // test.blog + wp.com + jetpack (legacy)
-    XCTAssertEqual(3, [blogService blogCountForAllAccounts]);
+    XCTAssertEqual(3, [Blog countInContext:self.testContextManager.mainContext]);
     // dotcom1.wordpress.com
     XCTAssertEqual(1, wpComAccount.blogs.count);
     Blog *testBlog = [[wpComAccount.blogs filteredSetUsingPredicate:[NSPredicate predicateWithFormat:@"blogID = 1"]] anyObject];
@@ -152,7 +151,7 @@
     // dotcom1.wordpress.com + jetpack.example.com
     XCTAssertEqual(2, wpComAccount.blogs.count);
     // test.blog + wp.com + jetpack (wpcc)
-    XCTAssertEqual(3, [blogService blogCountForAllAccounts]);
+    XCTAssertEqual(3, [Blog countInContext:self.testContextManager.mainContext]);
 
     testBlog = [[wpComAccount.blogs filteredSetUsingPredicate:[NSPredicate predicateWithFormat:@"blogID = 1"]] anyObject];
     XCTAssertNotNil(testBlog);
@@ -178,12 +177,12 @@
     BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:self.testContextManager.mainContext];
     WPAccount *wpComAccount = [accountService createOrUpdateAccountWithUsername:@"user" authToken:@"token"];
 
-    Blog *dotcomBlog = [blogService createBlogWithAccount:wpComAccount];
+    Blog *dotcomBlog = [Blog createBlankBlogWithAccount:wpComAccount];
     dotcomBlog.xmlrpc = @"http://dotcom1.wordpress.com/xmlrpc.php";
     dotcomBlog.url = @"http://dotcom1.wordpress.com/";
     dotcomBlog.dotComID = @1;
 
-    Blog *jetpackBlog = [blogService createBlog];
+    Blog *jetpackBlog = [Blog createBlankBlogInContext:self.testContextManager.mainContext];
     jetpackBlog.username = @"jetpack";
     jetpackBlog.xmlrpc = @"https://jetpack.example.com/xmlrpc.php";
     jetpackBlog.url = @"https://jetpack.example.com/";
@@ -193,7 +192,7 @@
 
     XCTAssertEqual(1, [accountService numberOfAccounts]);
     // test.blog + wp.com + jetpack (legacy)
-    XCTAssertEqual(3, [blogService blogCountForAllAccounts]);
+    XCTAssertEqual(3, [Blog countInContext:self.testContextManager.mainContext]);
     // dotcom1.wordpress.com
     XCTAssertEqual(1, wpComAccount.blogs.count);
 
@@ -210,7 +209,7 @@
     // dotcom1.wordpress.com + jetpack.example.com
     XCTAssertEqual(2, wpComAccount.blogs.count);
     // test.blog + wp.com + jetpack (wpcc)
-    XCTAssertEqual(3, [blogService blogCountForAllAccounts]);
+    XCTAssertEqual(3, [Blog countInContext:self.testContextManager.mainContext]);
 }
 
 @end

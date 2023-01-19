@@ -1,4 +1,7 @@
-* [*] User Mention: When replying to a post or a comment, sort user-mentions suggestions by prefix first then alphabetically. [#19218]
-* [*] User Mention: Fixed an issue where the user-mentions suggestions were disappearing after expanding/collapsing the reply field. [#19248]
-* [***] [internal] Update Sentry, our crash monitoring tool, to its latest major version [#19315]
+We’ve been hard at work on extra-technical, behind-the-scenes fixes and updates to keep the WordPress app running smoothly.
 
+- Posticulating features
+- Rearchitecting interfaces
+- Reticulating splines
+- Codifying similitude
+- Rebuilding the gigaverse

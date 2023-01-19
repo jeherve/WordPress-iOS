@@ -27,7 +27,7 @@
 
 @interface PostTagServiceTests : XCTestCase
 
-@property (nonatomic, strong) ContextManagerMock *manager;
+@property (nonatomic, strong) id<CoreDataStack> manager;
 @property (nonatomic, strong) Blog *blog;
 @property (nonatomic, strong) PostTagServiceForStubbing *service;
 
@@ -39,7 +39,7 @@
 {
     [super setUp];
 
-    self.manager = [ContextManagerMock new];
+    self.manager = [self coreDataStackForTesting];
     WordPressComRestApi *api = OCMStrictClassMock([WordPressComRestApi class]);
 
     Blog *blog = [ModelTestHelper insertDotComBlogWithContext:self.manager.mainContext];

@@ -178,7 +178,7 @@ class MeViewController: UITableViewController {
                                               loading: sharePresenter.isLoading))
 
                 rows.append(NavigationItemRow(title: RowTitles.about,
-                                              icon: UIImage.gridicon(.mySites),
+                                              icon: UIImage.gridicon(AppConfiguration.isJetpack ? .plans : .mySites),
                                               accessoryType: .disclosureIndicator,
                                               action: pushAbout(),
                                               accessibilityIdentifier: "About"))
@@ -398,8 +398,7 @@ class MeViewController: UITableViewController {
 
     private var logOutAlertTitle: String {
         let context = ContextManager.sharedInstance().mainContext
-        let service = PostService(managedObjectContext: context)
-        let count = service.countPostsWithoutRemote()
+        let count = AbstractPost.countLocalPosts(in: context)
 
         guard count > 0 else {
             return LogoutAlert.defaultTitle
@@ -553,7 +552,10 @@ extension MeViewController {
               JetpackBrandingVisibility.all.enabled else {
             return nil
         }
-        return JetpackButton.makeBadgeView(target: self, selector: #selector(jetpackButtonTapped))
+        let textProvider = JetpackBrandingTextProvider(screen: JetpackBadgeScreen.me)
+        return JetpackButton.makeBadgeView(title: textProvider.brandingText(),
+                                           target: self,
+                                           selector: #selector(jetpackButtonTapped))
     }
 
     @objc private func jetpackButtonTapped() {

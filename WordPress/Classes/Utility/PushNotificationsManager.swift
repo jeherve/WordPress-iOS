@@ -11,6 +11,13 @@ import UserNotifications
 ///
 final public class PushNotificationsManager: NSObject {
 
+    // MARK: Initializer
+
+    override init() {
+        super.init()
+        registerForNotifications()
+    }
+
     /// Returns the shared PushNotificationsManager instance.
     ///
     @objc static let shared = PushNotificationsManager()
@@ -53,14 +60,31 @@ final public class PushNotificationsManager: NSObject {
         return sharedApplication.applicationState
     }
 
+    private var didRegisterForRemoteNotifications = false
 
+
+    /// Enables or disables remote notifications based on current settings.
     /// Registers the device for Remote Notifications: Badge + Sounds + Alerts
     ///
-    @objc func registerForRemoteNotifications() {
+    @objc func setupRemoteNotifications() {
+        guard JetpackNotificationMigrationService.shared.shouldPresentNotifications() else {
+            disableRemoteNotifications()
+            return
+        }
+
         sharedApplication.registerForRemoteNotifications()
+        didRegisterForRemoteNotifications = true
+        return
     }
 
-
+    private func disableRemoteNotifications() {
+        if !didRegisterForRemoteNotifications {
+            sharedApplication.registerForRemoteNotifications()
+        }
+        sharedApplication.unregisterForRemoteNotifications()
+        sharedApplication.applicationIconBadgeNumber = 0
+        didRegisterForRemoteNotifications = false
+    }
 
     /// Checks asynchronously if Notifications are enabled in the Device's Settings, or not.
     ///
@@ -101,7 +125,7 @@ final public class PushNotificationsManager: NSObject {
         deviceToken = newToken
 
         // Register against WordPress.com
-        let noteService = NotificationSettingsService(managedObjectContext: ContextManager.sharedInstance().mainContext)
+        let noteService = NotificationSettingsService(coreDataStack: ContextManager.sharedInstance())
 
         noteService.registerDeviceForPushNotifications(newToken, success: { deviceId in
             DDLogVerbose("Successfully registered Device ID \(deviceId) for Push Notifications")
@@ -138,7 +162,7 @@ final public class PushNotificationsManager: NSObject {
 
         ZendeskUtils.unregisterDevice()
 
-        let noteService = NotificationSettingsService(managedObjectContext: ContextManager.sharedInstance().mainContext)
+        let noteService = NotificationSettingsService(coreDataStack: ContextManager.sharedInstance())
 
         noteService.unregisterDeviceForPushNotifications(knownDeviceId, success: {
             DDLogInfo("Successfully unregistered Device ID \(knownDeviceId) for Push Notifications!")
@@ -213,6 +237,13 @@ final public class PushNotificationsManager: NSObject {
         let event: WPAnalyticsStat = (applicationState == .background) ? .pushNotificationReceived : .pushNotificationAlertPressed
         WPAnalytics.track(event, withProperties: properties)
     }
+
+    // MARK: Observing Notifications
+
+    private func registerForNotifications() {
+        let notificationCenter = NotificationCenter.default
+        notificationCenter.addObserver(self, selector: #selector(setupRemoteNotifications), name: .WPAppUITypeChanged, object: nil)
+    }
 }
 
 
@@ -244,7 +275,7 @@ extension PushNotificationsManager {
         WPAnalytics.track(.supportReceivedResponseFromSupport)
 
         if applicationState == .background {
-            WPTabBarController.sharedInstance().showMeScene()
+            RootViewCoordinator.sharedPresenter.showMeScene()
         }
 
         completionHandler?(.newData)
@@ -331,7 +362,7 @@ extension PushNotificationsManager {
             return false
         }
 
-        WPTabBarController.sharedInstance().showNotificationsTabForNote(withID: notificationId)
+        RootViewCoordinator.sharedPresenter.showNotificationsTabForNote(withID: notificationId)
         completionHandler?(.newData)
 
         return true
@@ -423,10 +454,12 @@ extension PushNotificationsManager {
                 return false
         }
 
-        if WPTabBarController.sharedInstance()?.presentedViewController != nil {
-            WPTabBarController.sharedInstance()?.dismiss(animated: false)
+        let rootViewController = RootViewCoordinator.sharedPresenter.rootViewController
+
+        if rootViewController.presentedViewController != nil {
+            rootViewController.dismiss(animated: false)
         }
-        WPTabBarController.sharedInstance()?.showMySitesTab()
+        RootViewCoordinator.sharedPresenter.showMySitesTab()
 
         if let taskName = userInfo.string(forKey: QuickStartTracking.taskNameKey),
             let quickStartType = userInfo.string(forKey: QuickStartTracking.quickStartTypeKey) {

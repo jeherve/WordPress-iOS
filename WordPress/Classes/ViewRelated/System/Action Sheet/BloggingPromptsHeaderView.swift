@@ -31,6 +31,7 @@ class BloggingPromptsHeaderView: UIView, NibLoadable {
     static func view(for prompt: BloggingPrompt?) -> BloggingPromptsHeaderView {
         let promptsHeaderView = BloggingPromptsHeaderView.loadFromNib()
         promptsHeaderView.configure(prompt)
+        WPAnalytics.track(.promptsBottomSheetViewed)
         return promptsHeaderView
     }
 }
@@ -58,7 +59,7 @@ private extension BloggingPromptsHeaderView {
     func configureStrings() {
         titleLabel.text = Strings.title
         infoButton.accessibilityLabel = Strings.infoButtonAccessibilityLabel
-        answerPromptButton.titleLabel?.text = Strings.answerButtonTitle
+        answerPromptButton.setTitle(Strings.answerButtonTitle, for: .normal)
         answeredLabel.text = Strings.answeredLabelTitle
         shareButton.titleLabel?.text = Strings.shareButtonTitle
     }

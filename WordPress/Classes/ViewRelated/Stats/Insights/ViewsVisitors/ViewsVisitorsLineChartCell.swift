@@ -12,6 +12,11 @@ struct StatsSegmentedControlData {
     var period: StatsPeriodUnit?
     var analyticsStat: WPAnalyticsStat?
 
+    enum Segment: Int {
+        case views
+        case visitors
+    }
+
     private(set) var accessibilityHint: String?
 
     init(segmentTitle: String, segmentData: Int, segmentPrevData: Int, difference: Int, differenceText: String, segmentDataStub: String? = nil, date: Date? = nil, period: StatsPeriodUnit? = nil, analyticsStat: WPAnalyticsStat? = nil, accessibilityHint: String? = nil, differencePercent: Int) {
@@ -54,11 +59,38 @@ struct StatsSegmentedControlData {
     }
 
     var differenceLabel: String {
-        let stringFormat = NSLocalizedString("%@%@ (%@%%)", comment: "Difference label for Insights Overview stat, indicating change from previous period. Ex: +99.9K(5%)")
-        return String.localizedStringWithFormat(stringFormat,
-                difference < 0 ? "" : "+",
+        // We want to show something like "+10.2K (+5%)" if we have a percentage difference and "1.2K" if we don't.
+        //
+        // Negative cases automatically appear with a negative sign "-10.2K (-5%)" by using `abbreviatedString()`.
+        // `abbreviatedString()` also handles formatting big numbers, i.e. 10,200 will become 10.2K.
+        let formatter = NumberFormatter()
+        formatter.locale = .current
+        let plusSign = difference <= 0 ? "" : "\(formatter.plusSign ?? "")"
+
+        if differencePercent != 0 {
+            let stringFormat = NSLocalizedString(
+                "insights.visitorsLineChartCell.differenceLabelWithPercentage",
+                value: "%1$@%2$@ (%3$@%%)",
+                comment: "Text for the Insights Overview stat difference label. Shows the change from the previous period, including the percentage value. E.g.: +12.3K (5%). %1$@ is the placeholder for the change sign ('-', '+', or none). %2$@ is the placeholder for the change numerical value. %3$@ is the placeholder for the change percentage value, excluding the % sign."
+            )
+            return String.localizedStringWithFormat(
+                stringFormat,
+                plusSign,
                 difference.abbreviatedString(),
-                differencePercent.abbreviatedString())
+                differencePercent.abbreviatedString()
+            )
+        } else {
+            let stringFormat = NSLocalizedString(
+                "insights.visitorsLineChartCell.differenceLabelWithoutPercentage",
+                value: "%1$@%2$@",
+                comment: "Text for the Insights Overview stat difference label. Shows the change from the previous period. E.g.: +12.3K. %1$@ is the placeholder for the change sign ('-', '+', or none). %2$@ is the placeholder for the change numerical value."
+            )
+            return String.localizedStringWithFormat(
+                stringFormat,
+                plusSign,
+                difference.abbreviatedString()
+            )
+        }
     }
 
     var differenceTextColor: UIColor {
@@ -80,13 +112,11 @@ struct StatsSegmentedControlData {
     var accessibilityValue: String? {
         return segmentDataStub != nil ? "" : "\(segmentData)"
     }
+}
 
-    enum Constants {
-        static let viewsHigher = NSLocalizedString("Your views this week are %@ higher than the previous week.\n", comment: "Stats insights views higher than previous week")
-        static let viewsLower = NSLocalizedString("Your views this week are %@ lower than the previous week.\n", comment: "Stats insights views lower than previous week")
-        static let visitorsHigher = NSLocalizedString("Your visitors this week are %@ higher than the previous week.\n", comment: "Stats insights visitors higher than previous week")
-        static let visitorsLower = NSLocalizedString("Your visitors this week are %@ lower than the previous week.\n", comment: "Stats insights visitors lower than previous week")
-    }
+
+protocol StatsInsightsViewsAndVisitorsDelegate: AnyObject {
+    func viewsAndVisitorsSegmendChanged(to selectedSegmentIndex: Int)
 }
 
 class ViewsVisitorsLineChartCell: StatsBaseCell, NibLoadable {
@@ -106,6 +136,8 @@ class ViewsVisitorsLineChartCell: StatsBaseCell, NibLoadable {
     @IBOutlet weak var bottomStackView: UIStackView!
 
     private weak var siteStatsInsightsDelegate: SiteStatsInsightsDelegate?
+    private weak var viewsAndVisitorsDelegate: StatsInsightsViewsAndVisitorsDelegate?
+
     private typealias Style = WPStyleGuide.Stats
     private var segmentsData = [StatsSegmentedControlData]()
 
@@ -134,26 +166,20 @@ class ViewsVisitorsLineChartCell: StatsBaseCell, NibLoadable {
         applyStyles()
     }
 
-    func configure(segmentsData: [StatsSegmentedControlData],
-                   lineChartData: [LineChartDataConvertible] = [],
-                   lineChartStyling: [LineChartStyling] = [],
-                   period: StatsPeriodUnit? = nil,
-                   statsLineChartViewDelegate: StatsLineChartViewDelegate? = nil,
-                   xAxisDates: [Date],
-                   delegate: SiteStatsInsightsDelegate? = nil
-    ) {
-        siteStatsInsightsDelegate = delegate
-        siteStatsInsightDetailsDelegate = siteStatsInsightsDelegate
+    func configure(row: ViewsVisitorsRow) {
+        siteStatsInsightsDelegate = row.siteStatsInsightsDelegate
+        siteStatsInsightDetailsDelegate = row.siteStatsInsightsDelegate
         statSection = .insightsViewsVisitors
 
-        self.segmentsData = segmentsData
-        self.chartData = lineChartData
-        self.chartStyling = lineChartStyling
-        self.statsLineChartViewDelegate = statsLineChartViewDelegate
-        self.period = period
-        self.xAxisDates = xAxisDates
+        self.segmentsData = row.segmentsData
+        self.chartData = row.chartData
+        self.chartStyling = row.chartStyling
+        self.statsLineChartViewDelegate = row.statsLineChartViewDelegate
+        self.viewsAndVisitorsDelegate = row.viewsAndVisitorsDelegate
+        self.period = row.period
+        self.xAxisDates = row.xAxisDates
 
-        setupSegmentedControl()
+        setupSegmentedControl(selectedSegment: row.selectedSegment)
         configureChartView()
         updateLabels()
     }
@@ -164,8 +190,9 @@ class ViewsVisitorsLineChartCell: StatsBaseCell, NibLoadable {
 
         configureChartView()
         updateLabels()
-    }
 
+        viewsAndVisitorsDelegate?.viewsAndVisitorsSegmendChanged(to: selectedSegmentIndex)
+    }
 }
 
 
@@ -178,20 +205,28 @@ private extension ViewsVisitorsLineChartCell {
         styleLabels()
     }
 
-    func setupSegmentedControl() {
+    func setupSegmentedControl(selectedSegment: StatsSegmentedControlData.Segment) {
         segmentedControl.selectedSegmentTintColor = UIColor.white
         segmentedControl.setTitleTextAttributes([.font: UIFont.preferredFont(forTextStyle: .subheadline).bold()], for: .normal)
         segmentedControl.setTitleTextAttributes([.foregroundColor: UIColor.black], for: .selected)
         segmentedControl.setTitle(segmentsData[0].segmentTitle, forSegmentAt: 0)
         segmentedControl.setTitle(segmentsData[1].segmentTitle, forSegmentAt: 1)
+        segmentedControl.selectedSegmentIndex = selectedSegment.rawValue
     }
 
     func styleLabels() {
         latestData.font = UIFont.preferredFont(forTextStyle: .title2).bold()
-        previousData.font = UIFont.preferredFont(forTextStyle: .title2).bold()
+        latestData.adjustsFontSizeToFitWidth = true
+        latestLabel.adjustsFontSizeToFitWidth = true
 
-        legendLatestLabel.text = NSLocalizedString("This week", comment: "This week legend label")
-        legendPreviousLabel.text = NSLocalizedString("Previous week", comment: "Previous week legend label")
+        previousData.font = UIFont.preferredFont(forTextStyle: .title2).bold()
+        previousData.adjustsFontSizeToFitWidth = true
+        previousLabel.adjustsFontSizeToFitWidth = true
+
+        legendLatestLabel.text = NSLocalizedString("stats.insights.label.viewsVisitorsLastDays", value: "Last 7-days", comment: "Last 7-days legend label")
+        legendLatestLabel.adjustsFontSizeToFitWidth = true
+        legendPreviousLabel.text = NSLocalizedString("stats.insights.label.viewsVisitorsPreviousDays", value: "Previous 7-days", comment: "Previous 7-days legend label")
+        legendPreviousLabel.adjustsFontSizeToFitWidth = true
     }
 
     func updateLabels() {

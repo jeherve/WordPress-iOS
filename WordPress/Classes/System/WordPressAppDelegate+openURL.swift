@@ -20,6 +20,19 @@ import AutomatticTracks
             return true
         }
 
+        /// WordPress only. Handle deeplink from JP that requests data export.
+        let wordPressExportRouter = MigrationDeepLinkRouter(urlForScheme: URL(string: AppScheme.wordpressMigrationV1.rawValue),
+                                                            routes: [WordPressExportRoute()])
+        if AppConfiguration.isWordPress,
+           wordPressExportRouter.canHandle(url: url) {
+            wordPressExportRouter.handle(url: url)
+            return true
+        }
+
+        if url.scheme == JetpackNotificationMigrationService.wordPressScheme {
+            return JetpackNotificationMigrationService.shared.handleNotificationMigrationOnWordPress()
+        }
+
         guard url.scheme == WPComScheme else {
             return false
         }
@@ -75,7 +88,7 @@ import AutomatticTracks
             return false
         }
 
-        WPTabBarController.sharedInstance()?.showReaderTab(forPost: NSNumber(value: postId), onBlog: NSNumber(value: blogId))
+        RootViewCoordinator.sharedPresenter.showReaderTab(forPost: NSNumber(value: postId), onBlog: NSNumber(value: blogId))
 
         return true
     }
@@ -85,6 +98,12 @@ import AutomatticTracks
         guard let params = url.queryItems,
             let siteId = params.intValue(of: "siteId"),
             let blog = try? Blog.lookup(withID: siteId, in: ContextManager.shared.mainContext) else {
+            return false
+        }
+
+        guard JetpackFeaturesRemovalCoordinator.jetpackFeaturesEnabled() else {
+            let properties = ["calling_function": "deep_link", "url": url.absoluteString]
+            WPAnalytics.track(.jetpackFeatureIncorrectlyAccessed, properties: properties)
             return false
         }
 
@@ -99,14 +118,14 @@ import AutomatticTracks
             // so the Stats view displays the correct stats.
             SiteStatsInformation.sharedInstance.siteID = currentSiteID
 
-            WPTabBarController.sharedInstance()?.dismiss(animated: true, completion: nil)
+            RootViewCoordinator.sharedPresenter.rootViewController.dismiss(animated: true, completion: nil)
         }
 
         let navController = UINavigationController(rootViewController: statsViewController)
         navController.modalPresentationStyle = .currentContext
         navController.navigationBar.isTranslucent = false
 
-        WPTabBarController.sharedInstance()?.present(navController, animated: true, completion: nil)
+        RootViewCoordinator.sharedPresenter.rootViewController.present(navController, animated: true, completion: nil)
 
         return true
     }
@@ -143,15 +162,14 @@ import AutomatticTracks
         let tags = params.value(of: NewPostKey.tags)
 
         let context = ContextManager.sharedInstance().mainContext
-        let blogService = BlogService(managedObjectContext: context)
-        guard let blog = blogService.lastUsedOrFirstBlog() else {
+        guard let blog = Blog.lastUsedOrFirst(in: context) else {
             return false
         }
 
         // Should more formats be accepted in the future, this line would have to be expanded to accomodate it.
         let contentEscaped = contentRaw.escapeHtmlNamedEntities()
 
-        let post = PostService(managedObjectContext: context).createDraftPost(for: blog)
+        let post = blog.createDraftPost()
         post.postTitle = title
         post.content = contentEscaped
         post.tags = tags
@@ -159,7 +177,7 @@ import AutomatticTracks
         let postVC = EditPostViewController(post: post)
         postVC.modalPresentationStyle = .fullScreen
 
-        WPTabBarController.sharedInstance()?.present(postVC, animated: true, completion: nil)
+        RootViewCoordinator.sharedPresenter.rootViewController.present(postVC, animated: true, completion: nil)
 
         WPAppAnalytics.track(.editorCreatedPost, withProperties: [WPAppAnalyticsKeyTapSource: "url_scheme", WPAppAnalyticsKeyPostType: "post"])
 
@@ -181,15 +199,14 @@ import AutomatticTracks
         let title = params.value(of: NewPostKey.title)
 
         let context = ContextManager.sharedInstance().mainContext
-        let blogService = BlogService(managedObjectContext: context)
-        guard let blog = blogService.lastUsedOrFirstBlog() else {
+        guard let blog = Blog.lastUsedOrFirst(in: context) else {
             return false
         }
 
         // Should more formats be accepted be accepted in the future, this line would have to be expanded to accomodate it.
         let contentEscaped = contentRaw.escapeHtmlNamedEntities()
 
-        WPTabBarController.sharedInstance()?.showPageEditor(blog: blog, title: title, content: contentEscaped, source: "url_scheme")
+        RootViewCoordinator.sharedPresenter.showPageEditor(blog: blog, title: title, content: contentEscaped, source: "url_scheme")
 
         return true
     }

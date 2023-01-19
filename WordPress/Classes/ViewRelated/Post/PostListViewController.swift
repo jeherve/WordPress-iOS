@@ -56,7 +56,7 @@ class PostListViewController: AbstractPostListViewController, UIViewControllerRe
     @IBOutlet weak var filterTabBarBottomConstraint: NSLayoutConstraint!
     @IBOutlet weak var tableViewTopConstraint: NSLayoutConstraint!
 
-    private var database: KeyValueDatabase = UserDefaults.standard
+    private var database: UserPersistentRepository = UserPersistentStoreFactory.instance()
 
     private lazy var _tableViewHandler: PostListTableViewHandler = {
         let tableViewHandler = PostListTableViewHandler(tableView: tableView)
@@ -191,7 +191,8 @@ class PostListViewController: AbstractPostListViewController, UIViewControllerRe
                 guard let self = self else {
                     return
                 }
-                (self.tabBarController as? WPTabBarController)?.showStoryEditor(blog: self.blog, title: nil, content: nil)
+                let presenter = RootViewCoordinator.sharedPresenter
+                presenter.showStoryEditor(blog: self.blog, title: nil, content: nil)
             }, source: Constants.source), at: 0)
         }
         return CreateButtonCoordinator(self, actions: actions, source: Constants.source, blog: blog)

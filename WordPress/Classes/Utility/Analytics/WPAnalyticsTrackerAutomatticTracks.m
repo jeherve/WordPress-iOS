@@ -1,5 +1,5 @@
 #import "WPAnalyticsTrackerAutomatticTracks.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "AccountService.h"
 #import "BlogService.h"
 #import "WPAccount.h"
@@ -123,7 +123,7 @@ NSString *const TracksUserDefaultsLoggedInUserIDKey = @"TracksLoggedInUserID";
         account = [WPAccount lookupDefaultWordPressComAccountInContext:context];
         BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:[[ContextManager sharedInstance] mainContext]];
 
-        blogCount = [blogService blogCountForAllAccounts];
+        blogCount = [Blog countInContext:context];
         jetpackBlogsPresent = [blogService hasAnyJetpackBlogs];
         if (account != nil) {
             username = account.username;

@@ -3,6 +3,13 @@
 
 @import CocoaLumberjack;
 
+DDLogLevel ddLogLevel = DDLogLevelInfo;
+
+void SetCocoaLumberjackObjCLogLevel(NSUInteger ddLogLevelRawValue)
+{
+    ddLogLevel = (DDLogLevel)ddLogLevelRawValue;
+}
+
 @interface WPLogger ()
 @property (nonatomic, strong, readwrite) DDFileLogger * _Nonnull fileLogger;
 @end
@@ -99,6 +106,30 @@
     }
     
     return description;
+}
+
+#pragma mark - Deleting
+
+- (void)deleteAllLogs
+{
+    NSArray *logFiles = self.fileLogger.logFileManager.sortedLogFileInfos;
+    for (DDLogFileInfo *logFileInfo in logFiles) {
+        [[NSFileManager defaultManager] removeItemAtPath:logFileInfo.filePath error:nil];
+    }
+    
+    DDLogWarn(@"All log files erased.");
+}
+
+- (void)deleteArchivedLogs
+{
+    NSArray *logFiles = self.fileLogger.logFileManager.sortedLogFileInfos;
+    for (DDLogFileInfo *logFileInfo in logFiles) {
+        if (logFileInfo.isArchived) {
+            [[NSFileManager defaultManager] removeItemAtPath:logFileInfo.filePath error:nil];
+        }
+    }
+    
+    DDLogWarn(@"All archived log files erased.");
 }
 
 #pragma mark - Public static methods

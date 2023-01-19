@@ -23,7 +23,7 @@ class PromptRemindersSchedulerTests: XCTestCase {
         blog.dotComID!.intValue
     }
 
-    private var contextManager: ContextManagerMock!
+    private var contextManager: ContextManager!
     private var serviceFactory: BloggingPromptsServiceFactory!
     private var notificationScheduler: MockNotificationScheduler!
     private var pushAuthorizer: MockPushNotificationAuthorizer!
@@ -34,7 +34,7 @@ class PromptRemindersSchedulerTests: XCTestCase {
     private var dateProvider: MockCurrentDateProvider!
 
     override func setUp() {
-        contextManager = ContextManagerMock()
+        contextManager = ContextManager.forTesting()
         serviceFactory = BloggingPromptsServiceFactory(contextManager: contextManager)
         notificationScheduler = MockNotificationScheduler()
         pushAuthorizer = MockPushNotificationAuthorizer()
@@ -513,6 +513,18 @@ private extension PromptRemindersSchedulerTests {
             savedData = contents
 
             return saveShouldSucceed
+        }
+
+        func containerURL(forAppGroup appGroup: String) -> URL? {
+            return nil
+        }
+
+        func removeItem(at url: URL) throws {
+            // no-op
+        }
+
+        func copyItem(at srcURL: URL, to dstURL: URL) throws {
+            // no-op
         }
     }
 }

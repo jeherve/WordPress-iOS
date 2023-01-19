@@ -1,1 +1,7 @@
-This release is short and sweet: we’ve made Jetpack Social more noticeable in the Sharing section of your site settings, as well as in your post settings. Let’s get social.
+We’ve been hard at work on extra-technical, behind-the-scenes fixes and updates to keep the WordPress app running smoothly.
+
+- Posticulating features
+- Rearchitecting interfaces
+- Reticulating splines
+- Codifying similitude
+- Rebuilding the gigaverse

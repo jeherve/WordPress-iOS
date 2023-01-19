@@ -76,13 +76,14 @@ extension WordPressAuthenticationManager {
                                                    enableSignInWithApple: enableSignInWithApple,
                                                    enableSignupWithGoogle: AppConfiguration.allowSignUp,
                                                    enableUnifiedAuth: true,
-                                                   enableUnifiedCarousel: FeatureFlag.unifiedPrologueCarousel.enabled)
+                                                   enableUnifiedCarousel: FeatureFlag.unifiedPrologueCarousel.enabled,
+                                                   enableSocialLogin: true)
     }
 
     private func authenticatorStyle() -> WordPressAuthenticatorStyle {
         let prologueVC: UIViewController? = {
             guard let viewController = authenticationHandler?.prologueViewController else {
-                if FeatureFlag.newLandingScreen.enabled {
+                if FeatureFlag.newWordPressLandingScreen.enabled {
                     return SplashPrologueViewController()
                 }
 
@@ -115,7 +116,7 @@ extension WordPressAuthenticationManager {
         var prologuePrimaryButtonStyle: NUXButtonStyle?
         var prologueSecondaryButtonStyle: NUXButtonStyle?
 
-        if FeatureFlag.newLandingScreen.enabled {
+        if FeatureFlag.newWordPressLandingScreen.enabled, AppConfiguration.isWordPress {
             prologuePrimaryButtonStyle = SplashPrologueStyleGuide.primaryButtonStyle
             prologueSecondaryButtonStyle = SplashPrologueStyleGuide.secondaryButtonStyle
         } else {
@@ -179,6 +180,8 @@ extension WordPressAuthenticationManager {
                                                   viewControllerBackgroundColor: .basicBackground,
                                                   prologueButtonsBackgroundColor: prologueButtonsBackgroundColor,
                                                   prologueViewBackgroundColor: prologueViewBackgroundColor,
+                                                  prologueBackgroundImage: authenticationHandler?.prologueBackgroundImage,
+                                                  prologueButtonsBlurEffect: authenticationHandler?.prologueButtonsBlurEffect,
                                                   navBarBackgroundColor: .appBarBackground,
                                                   navButtonTextColor: .appBarTint,
                                                   navTitleTextColor: .appBarText)
@@ -250,9 +253,8 @@ extension WordPressAuthenticationManager: WordPressAuthenticatorDelegate {
     ///
     var dismissActionEnabled: Bool {
         let context = ContextManager.sharedInstance().mainContext
-        let blogService = BlogService(managedObjectContext: context)
 
-        return AccountHelper.isDotcomAvailable() || blogService.blogCountForAllAccounts() > 0
+        return AccountHelper.isDotcomAvailable() || Blog.count(in: context) > 0
     }
 
     /// Indicates whether if the Support Action should be enabled, or not.
@@ -290,7 +292,9 @@ extension WordPressAuthenticationManager: WordPressAuthenticatorDelegate {
 
     /// Returns an instance of a SupportView, configured to be displayed from a specified Support Source.
     ///
-    func presentSupport(from sourceViewController: UIViewController, sourceTag: WordPressSupportSourceTag) {
+    func presentSupport(from sourceViewController: UIViewController, sourceTag: WordPressSupportSourceTag,
+                        lastStep: AuthenticatorAnalyticsTracker.Step,
+                        lastFlow: AuthenticatorAnalyticsTracker.Flow) {
         // Reset the nav style so the Support nav bar has the WP style, not the Auth style.
         WPStyleGuide.configureNavigationAppearance()
 
@@ -334,7 +338,7 @@ extension WordPressAuthenticationManager: WordPressAuthenticatorDelegate {
 
     /// Presents the Login Epilogue, in the specified NavigationController.
     ///
-    func presentLoginEpilogue(in navigationController: UINavigationController, for credentials: AuthenticatorCredentials, onDismiss: @escaping () -> Void) {
+    func presentLoginEpilogue(in navigationController: UINavigationController, for credentials: AuthenticatorCredentials, source: SignInSource?, onDismiss: @escaping () -> Void) {
 
         // If adding a self-hosted site, skip the Epilogue
         if let wporg = credentials.wporg,
@@ -379,7 +383,7 @@ extension WordPressAuthenticationManager: WordPressAuthenticatorDelegate {
             ABTest.start()
 
             self.recentSiteService.touch(blog: blog)
-            self.presentOnboardingQuestionsPrompt(in: navigationController, onDismiss: onDismiss)
+            self.presentOnboardingQuestionsPrompt(in: navigationController, blog: blog, onDismiss: onDismiss)
         }
 
         // If the user has only 1 blog, skip the site selector and go right to the next step
@@ -394,13 +398,21 @@ extension WordPressAuthenticationManager: WordPressAuthenticatorDelegate {
         let onDismissQuickStartPromptForNewSiteHandler = onDismissQuickStartPromptHandler(type: .newSite, onDismiss: onDismiss)
 
         epilogueViewController.onCreateNewSite = {
-            let wizardLauncher = SiteCreationWizardLauncher(onDismiss: onDismissQuickStartPromptForNewSiteHandler)
-            guard let wizard = wizardLauncher.ui else {
-                return
-            }
+            let source = "login_epilogue"
+            JetpackFeaturesRemovalCoordinator.presentSiteCreationOverlayIfNeeded(in: navigationController, source: source, onWillDismiss: {
+                guard JetpackFeaturesRemovalCoordinator.siteCreationPhase() != .two else {
+                    return
+                }
 
-            navigationController.present(wizard, animated: true)
-            WPAnalytics.track(.enhancedSiteCreationAccessed, withProperties: ["source": "login_epilogue"])
+                // Display site creation flow if not in phase two
+                let wizardLauncher = SiteCreationWizardLauncher(onDismiss: onDismissQuickStartPromptForNewSiteHandler)
+                guard let wizard = wizardLauncher.ui else {
+                    return
+                }
+
+                navigationController.present(wizard, animated: true)
+                WPAnalytics.track(.enhancedSiteCreationAccessed, withProperties: ["source": source])
+            })
         }
 
         navigationController.delegate = epilogueViewController
@@ -473,10 +485,10 @@ extension WordPressAuthenticationManager: WordPressAuthenticatorDelegate {
     ///
     func userAuthenticatedWithAppleUserID(_ appleUserID: String) {
         do {
-            try KeychainUtils.shared.storeUsername(WPAppleIDKeychainUsernameKey,
-                                                   password: appleUserID,
-                                                   serviceName: WPAppleIDKeychainServiceName,
-                                                   updateExisting: true)
+            try SFHFKeychainUtils.storeUsername(WPAppleIDKeychainUsernameKey,
+                                                andPassword: appleUserID,
+                                                forServiceName: WPAppleIDKeychainServiceName,
+                                                updateExisting: true)
         } catch {
             DDLogInfo("Error while saving Apple User ID: \(error)")
         }
@@ -544,8 +556,17 @@ private extension WordPressAuthenticationManager {
 
 // MARK: - Onboarding Questions Prompt
 private extension WordPressAuthenticationManager {
-    private func presentOnboardingQuestionsPrompt(in navigationController: UINavigationController, onDismiss: (() -> Void)? = nil) {
+    private func presentOnboardingQuestionsPrompt(in navigationController: UINavigationController, blog: Blog, onDismiss: (() -> Void)? = nil) {
         let windowManager = self.windowManager
+
+        guard JetpackFeaturesRemovalCoordinator.jetpackFeaturesEnabled() else {
+            if self.windowManager.isShowingFullscreenSignIn {
+                self.windowManager.dismissFullscreenSignIn(blogToShow: blog)
+            } else {
+                self.windowManager.showAppUI(for: blog)
+            }
+            return
+        }
 
         let coordinator = OnboardingQuestionsCoordinator()
         coordinator.navigationController = navigationController
@@ -577,9 +598,9 @@ private extension WordPressAuthenticationManager {
     /// We'll pre-switch to the users selected tab before the login flow dismisses
     private func handleOnboardingQuestionsWillDismiss(option: OnboardingOption) {
         if option == .reader {
-            WPTabBarController.sharedInstance().showReaderTab()
+            RootViewCoordinator.sharedPresenter.showReaderTab()
         } else if option == .notifications {
-            WPTabBarController.sharedInstance().showNotificationsTab()
+            RootViewCoordinator.sharedPresenter.showNotificationsTab()
         }
     }
 
@@ -695,6 +716,11 @@ private extension WordPressAuthenticationManager {
     private func syncWPCom(authToken: String, isJetpackLogin: Bool, onCompletion: @escaping () -> ()) {
         let service = WordPressComSyncService()
 
+        // Create a dispatch group to wait for both API calls.
+        let syncGroup = DispatchGroup()
+
+        // Sync account and blog
+        syncGroup.enter()
         service.syncWPCom(authToken: authToken, isJetpackLogin: isJetpackLogin, onSuccess: { account in
 
             /// HACK: An alternative notification to LoginFinished. Observe this instead of `WPSigninDidFinishNotification` for Jetpack logins.
@@ -703,11 +729,21 @@ private extension WordPressAuthenticationManager {
             let notification = isJetpackLogin == true ? .wordpressLoginFinishedJetpackLogin : Foundation.Notification.Name(rawValue: WordPressAuthenticator.WPSigninDidFinishNotification)
             NotificationCenter.default.post(name: notification, object: account)
 
-            onCompletion()
-
+            syncGroup.leave()
         }, onFailure: { _ in
-            onCompletion()
+            syncGroup.leave()
         })
+
+        // Refresh Remote Feature Flags
+        syncGroup.enter()
+        WordPressAppDelegate.shared?.updateFeatureFlags(authToken: authToken, completion: {
+            syncGroup.leave()
+        })
+
+        // Sync done
+        syncGroup.notify(queue: .main) {
+            onCompletion()
+        }
     }
 
     /// Synchronizes a WordPress.org account with the specified credentials.

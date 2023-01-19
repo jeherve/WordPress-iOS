@@ -1,7 +1,7 @@
 #import "BlogSelectorViewController.h"
 #import "BlogDetailsViewController.h"
 #import "WPBlogTableViewCell.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "Blog.h"
 #import "WPAccount.h"
 #import "AccountService.h"
@@ -236,16 +236,13 @@
 
 - (void)syncBlogs
 {
-    NSManagedObjectContext *context = [[ContextManager sharedInstance] newDerivedContext];
-    
-    [context performBlock:^{
-        BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:context];
+    [[ContextManager sharedInstance] performAndSaveUsingBlock:^(NSManagedObjectContext *context) {
         WPAccount *defaultAccount = [WPAccount lookupDefaultWordPressComAccountInContext:context];
-
         if (!defaultAccount) {
             return;
         }
-        
+
+        BlogService *blogService = [[BlogService alloc] initWithManagedObjectContext:context];
         [blogService syncBlogsForAccount:defaultAccount success:nil failure:nil];
     }];
 }

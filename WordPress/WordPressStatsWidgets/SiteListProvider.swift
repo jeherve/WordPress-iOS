@@ -8,13 +8,13 @@ struct SiteListProvider<T: HomeWidgetData>: IntentTimelineProvider {
     let widgetKind: StatsWidgetKind
 
     // refresh interval of the widget, in minutes
-    let refreshInterval = 60
+    let refreshInterval = 30
     // minimum elapsed time, in minutes, before new data are fetched from the backend.
-    let minElapsedTimeToRefresh = 10
+    let minElapsedTimeToRefresh = 1
 
     private var defaultSiteID: Int? {
 
-        UserDefaults(suiteName: WPAppGroupName)?.object(forKey: WPStatsHomeWidgetsUserDefaultsSiteIdKey) as? Int
+        UserDefaults(suiteName: WPAppGroupName)?.object(forKey: AppConfiguration.Widget.Stats.userDefaultsSiteIdKey) as? Int
     }
 
     func placeholder(in context: Context) -> StatsWidgetEntry {
@@ -42,7 +42,7 @@ struct SiteListProvider<T: HomeWidgetData>: IntentTimelineProvider {
         guard let defaultSiteID = defaultSiteID,
               let widgetData = widgetData(for: configuration, defaultSiteID: defaultSiteID) else {
 
-            if let loggedIn = UserDefaults(suiteName: WPAppGroupName)?.bool(forKey: WPStatsHomeWidgetsUserDefaultsLoggedInKey), loggedIn == false {
+            if let loggedIn = UserDefaults(suiteName: WPAppGroupName)?.bool(forKey: AppConfiguration.Widget.Stats.userDefaultsLoggedInKey), loggedIn == false {
                 completion(Timeline(entries: [.loggedOut(widgetKind)], policy: .never))
             } else {
                 completion(Timeline(entries: [.noData], policy: .never))

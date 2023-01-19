@@ -102,7 +102,7 @@ class PostSignUpInterstitialViewController: UIViewController {
     @IBAction func cancel(_ sender: Any) {
         dismiss?(.none)
 
-        WPTabBarController.sharedInstance().showReaderTab()
+        RootViewCoordinator.sharedPresenter.showReaderTab()
 
         tracker.track(click: .dismiss, ifTrackingNotEnabled: {
             WPAnalytics.track(.welcomeNoSitesInterstitialDismissed)
@@ -128,11 +128,6 @@ class PostSignUpInterstitialViewController: UIViewController {
     }
 
     private class func numberOfBlogs() -> Int {
-        let context = ContextManager.sharedInstance().mainContext
-        let blogService = BlogService(managedObjectContext: context)
-
-        let blogCount = blogService.blogCountForAllAccounts()
-
-        return blogCount
+        return Blog.count(in: ContextManager.sharedInstance().mainContext)
     }
 }

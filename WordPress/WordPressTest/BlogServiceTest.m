@@ -2,7 +2,7 @@
 #import <OCMock/OCMock.h>
 #import "AccountService.h"
 #import "BlogService.h"
-#import "ContextManager.h"
+#import "CoreDataStack.h"
 #import "Blog.h"
 #import "WPAccount.h"
 #import "WordPressTest-Swift.h"
@@ -12,7 +12,7 @@
 @property (nonatomic, strong) BlogService *blogService;
 @property (nonatomic, strong) id blogServiceMock;
 @property (nonatomic, strong) Blog *blog;
-@property (nonatomic, strong) ContextManagerMock *coreDataStack;
+@property (nonatomic, strong) id<CoreDataStack> coreDataStack;
 
 @end
 
@@ -22,7 +22,7 @@
 {
     [super setUp];
 
-    self.coreDataStack = [[ContextManagerMock alloc] init];
+    self.coreDataStack = [self coreDataStackForTesting];
 
     self.blogService = [[BlogService alloc] initWithManagedObjectContext:[self.coreDataStack mainContext]];
     AccountService *service = [[AccountService alloc] initWithManagedObjectContext:self.coreDataStack.mainContext];
@@ -60,20 +60,6 @@
     self.coreDataStack = nil;
 
     [super tearDown];
-}
-
-- (void)testHasVisibleWPComAccountsWithVisibleWPComAccounts
-{
-    OCMStub([self.blogServiceMock blogCountVisibleForWPComAccounts]).andReturn(1);
-
-    XCTAssertTrue([self.blogService hasVisibleWPComAccounts]);
-}
-
-- (void)testHasVisibleWPComAccountsWithNoVisibleWPComAccounts
-{
-    OCMStub([self.blogServiceMock blogCountVisibleForWPComAccounts]).andReturn(0);
-
-    XCTAssertFalse([self.blogService hasVisibleWPComAccounts]);
 }
 
 - (void)cleanUpNSUserDefaultValues

@@ -41,7 +41,7 @@ class ContextManagerTests: XCTestCase {
         }
 
         // Migrate to the latest version
-        let contextManager = ContextManager(modelName: ContextManagerModelNameCurrent, store: storeURL, contextFactory: nil)
+        let contextManager = ContextManager(modelName: ContextManagerModelNameCurrent, store: storeURL)
 
         let object = try contextManager.mainContext.existingObject(with: XCTUnwrap(objectID))
         XCTAssertNotNil(object, "Object should exist in new PSC")
@@ -79,7 +79,7 @@ class ContextManagerTests: XCTestCase {
         }
 
         // Migrate to the latest
-        let contextManager = ContextManager(modelName: ContextManagerModelNameCurrent, store: storeURL, contextFactory: nil)
+        let contextManager = ContextManager(modelName: ContextManagerModelNameCurrent, store: storeURL)
         let object = try contextManager.mainContext.existingObject(with: XCTUnwrap(objectID))
         XCTAssertNotNil(object, "Object should exist in new PSC")
         XCTAssertNoThrow(object.value(forKey: "author"), "Theme.author should exist in current model version, but we were unable to fetch it")
@@ -106,7 +106,7 @@ class ContextManagerTests: XCTestCase {
         }
 
         // Initialize 24 > 25 Migration
-        let contextManager = ContextManager(modelName: model25Name, store: storeURL, contextFactory: nil)
+        let contextManager = ContextManager(modelName: model25Name, store: storeURL)
         let secondContext = contextManager.mainContext
 
         // Test the existence of Post object after migration
@@ -142,7 +142,7 @@ class ContextManagerTests: XCTestCase {
     }
 
     func testSaveDerivedContextWithChangesInMainContext() throws {
-        let contextManager = ContextManagerMock()
+        let contextManager = ContextManager.forTesting()
         let derivedContext = contextManager.newDerivedContext()
 
         derivedContext.perform {
@@ -176,18 +176,23 @@ class ContextManagerTests: XCTestCase {
         // Discard the username change that's made above
         contextManager.mainContext.reset()
 
-        XCTExpectFailure("Known issue: the mainContext is saved along with the `ContextManager.save` functions")
+        // It's not great to be accessing global state here, but ContextManager accesses this
+        // feature flag under the hood and injecting it is out of scope at this point in time.
+        if FeatureFlag.newCoreDataContext.enabled == false {
+            // ContextManager uses LegacyContextFactory unless the newCoreDataContext feature flag is on.
+            XCTExpectFailure("Known issue of `LegacyContextFactory`: the `mainContext` is saved along with the `ContextManager.save` functions")
+        }
         expect(try findFirstUser()?.username) == "First User"
     }
 
-    func testSaveUsingBlock() async {
-        let contextManager = ContextManagerMock()
+    func testSaveUsingBlock() async throws {
+        let contextManager = ContextManager.forTesting()
         let numberOfAccounts: () -> Int = {
             contextManager.mainContext.countObjects(ofType: WPAccount.self)
         }
         XCTAssertEqual(numberOfAccounts(), 0)
 
-        await contextManager.performAndSave { context in
+        try await contextManager.performAndSave { context in
             let account = WPAccount(context: context)
             account.userID = 1
             account.username = "First User"
@@ -227,7 +232,7 @@ class ContextManagerTests: XCTestCase {
     }
 
     func testSaveUsingBlockWithNestedCalls() {
-        let contextManager = ContextManagerMock()
+        let contextManager = ContextManager.forTesting()
         let accounts: () -> Set<String> = {
             let all = (try? contextManager.mainContext.fetch(NSFetchRequest<WPAccount>(entityName: "Account"))) ?? []
             return Set(all.map { $0.username! })

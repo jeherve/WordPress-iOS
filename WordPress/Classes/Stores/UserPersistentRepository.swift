@@ -7,6 +7,7 @@ protocol UserPersistentRepositoryReader {
     func array(forKey key: String) -> [Any]?
     func dictionary(forKey key: String) -> [String: Any]?
     func url(forKey key: String) -> URL?
+    func dictionaryRepresentation() -> [String: Any]
 }
 
 protocol UserPersistentRepositoryWriter: KeyValueDatabase {
@@ -22,17 +23,3 @@ protocol UserPersistentRepositoryWriter: KeyValueDatabase {
 typealias UserPersistentRepository = UserPersistentRepositoryReader & UserPersistentRepositoryWriter & UserPersistentRepositoryUtility
 
 extension UserDefaults: UserPersistentRepository {}
-
-extension UserPersistentStore {
-    private static var isOneOffMigrationCompleteKey: String {
-        "defaults_one_off_migration"
-    }
-
-    var isOneOffMigrationComplete: Bool {
-        get {
-            bool(forKey: Self.isOneOffMigrationCompleteKey)
-        } set {
-            set(newValue, forKey: Self.isOneOffMigrationCompleteKey)
-        }
-    }
-}
