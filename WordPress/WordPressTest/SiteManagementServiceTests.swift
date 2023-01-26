@@ -1,5 +1,7 @@
 import Foundation
 import XCTest
+import Nimble
+
 @testable import WordPress
 
 class SiteManagementServiceTests: CoreDataTestCase {
@@ -56,7 +58,7 @@ class SiteManagementServiceTests: CoreDataTestCase {
     override func setUp() {
         super.setUp()
 
-        siteManagementService = SiteManagementServiceTester(managedObjectContext: contextManager.mainContext)
+        siteManagementService = SiteManagementServiceTester(coreDataStack: contextManager)
         mockRemoteService = siteManagementService.mockRemoteService
     }
 
@@ -97,26 +99,28 @@ class SiteManagementServiceTests: CoreDataTestCase {
 
     func testDeleteSiteRemovesExistingBlogOnSuccess() {
         let context = contextManager.mainContext
-        let blog =
+        let blog = insertBlog(context)
 
-
-            insertBlog(context)
         let blogObjectID = blog.objectID
-
         XCTAssertFalse(blogObjectID.isTemporaryID, "Should be a permanent object")
 
-        let expect = expectation(
-            description: "Remove Blog success expectation")
+        let expectation = expectation(description: "Remove Blog success expectation")
         mockRemoteService.reset()
         siteManagementService.deleteSiteForBlog(blog,
             success: {
-                expect.fulfill()
+                expectation.fulfill()
             }, failure: nil)
         mockRemoteService.successBlockPassedIn?()
         waitForExpectations(timeout: 2, handler: nil)
 
+        context.refreshAllObjects()
+        context.processPendingChanges()
         let shouldBeRemoved = try? context.existingObject(with: blogObjectID)
         XCTAssertFalse(shouldBeRemoved != nil, "Blog was not removed")
+        XCTAssertEqual(shouldBeRemoved?.isDeleted, true)
+        XCTAssertEqual(shouldBeRemoved?.isFault, true)
+        XCTAssertEqual(context.countObjects(ofType: Blog.self), 0)
+        expect(try? context.existingObject(with: blogObjectID)).toEventually(beNil())
     }
 
     func testDeleteSiteCallsFailureBlock() {
